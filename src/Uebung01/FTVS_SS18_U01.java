@@ -16,8 +16,6 @@ package Uebung01;
 import SoFTlib.*;
 
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
 import java.util.Random;
 
 /**
@@ -63,6 +61,9 @@ class Auftragsknoten extends Node {
         // generiere Terminierungsnachricht und sende sie an die restlichen Rechner
         Msg terminate = form('t', "");
         terminate.send(verteiler + "EFGHIJ");
+
+        // @debug
+        say("terminating");
 
         return "0";
     }
@@ -183,9 +184,6 @@ class Auftragsknoten extends Node {
 class Verteiler extends Node {
 
     private abstrakterRechner[] rechner;
-    private Msg auftrag;
-    private Msg rekonfiguration;
-    private Msg terminate;
 
     public Verteiler(abstrakterRechner[] rechner) {
         this.rechner = rechner;
@@ -193,12 +191,18 @@ class Verteiler extends Node {
 
     public String runNode(String input) throws SoFTException {
         while (time() < 3000) {
-            auftrag = receive("A", 'a', time() + 1);
-            rekonfiguration = receive("A", 'r', time() + 1);
-            terminate = receive("A", 't', time() + 1);
+
+            // FIXME: adapt timeout
+            Msg auftrag = receive("A", 'a', time() + 1);
+            Msg rekonfiguration = receive("A", 'r', time() + 1);
+            Msg terminate = receive("A", 't', time() + 1);
 
             // wenn Terminierungsnachricht empfangen
             if (terminate != null) {
+
+                // @debug
+                say("terminating");
+
                 return "0";
             }
 
@@ -206,16 +210,17 @@ class Verteiler extends Node {
             if (auftrag != null) {
 
                 // @debug
-                System.out.println(auftrag.getCo());
+                say(auftrag.getCo());
 
                 verteileAuftrag();
+                auftrag = null;
             }
 
             // wenn Rekonfigurationsnachricht empfangen
             if (rekonfiguration != null) {
 
                 // @debug
-                System.out.println(rekonfiguration.getCo());
+                say(rekonfiguration.getCo());
 
                 rekonfiguriere();
             }
@@ -259,7 +264,19 @@ class Rechner extends abstrakterRechner {
     }
 
     public String runNode(String input) throws SoFTException {
+        while (time() < 3000) {
 
+            // FIXME: adapt timeout
+            Msg terminate = receive("A", 't', time() + 1);
+
+            if (terminate != null) {
+
+                // @debug
+                say("terminating");
+
+                return "0";
+            }
+        }
         return "0";
     }
 }

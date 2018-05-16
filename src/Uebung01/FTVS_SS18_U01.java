@@ -15,6 +15,7 @@ package Uebung01;
 
 import SoFTlib.*;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Random;
@@ -30,10 +31,14 @@ class Auftragsknoten extends Node {
     private static int AuftragsID = 0;
 
     // Liste der Verteiler
-    List<String> verteiler = Arrays.asList("B", "C", "D");
+    String verteiler = "BCD";
 
     // Liste der Auftraege
-    List auftrage;
+    ArrayList<String> auftraege = new ArrayList<String>() {
+    };
+
+    // Liste der Statusnachrichten
+    private List<Msg> statusnachrichten;
 
 
     public String runNode(String input) throws SoFTException {
@@ -45,13 +50,16 @@ class Auftragsknoten extends Node {
                     sendeAuftraege();
                     flag = false;
                 } else {
-                    receiveS();
+                    empfangeStatusnachrichten();
                 }
             }
         }
 
+        // generiere Terminierungsnachricht und sende sie an die restlichen Rechner
+        Msg terminate = form('t', "");
+        terminate.send(verteiler + "EFGHIJ");
 
-        return "";
+        return "1";
     }
 
 
@@ -69,21 +77,20 @@ class Auftragsknoten extends Node {
             if (i > 0) {
                 a += " ; ";
             }
-            a += ++AuftragsID + " 0 " + (rando.nextInt((6 - 1) + 1) + 1);
+            int aufwand = rando.nextInt((6 - 1) + 1) + 1;
+            a += ++AuftragsID + " 0 " + aufwand;
+
+            String auftrag = "(" + AuftragsID + " 0 " + aufwand + ")";
+            auftraege.add(auftrag);
         }
+
+        // @debug
+        for (String s : auftraege) {
+            System.out.println(s);
+        }
+
         return a + ")";
     }
-
-    //TODO
-    private void receiveS() throws SoFTException {
-        receive("E", 1);
-        receive("F", 1);
-        receive("G", 1);
-        receive("H", 1);
-        receive("I", 1);
-        receive("J", 1);
-    }
-
 
     private void sendeAuftraege() {
         // erzeuge neue Auftraege
@@ -93,39 +100,53 @@ class Auftragsknoten extends Node {
         Msg nachricht = form('a', auftraege);
 
         // schicke Nachrichten
-        String receivers = "";
-        for (String s : verteiler) {
-            receivers += s;
-        }
-
         try {
-            nachricht.send(receivers);
+            nachricht.send(verteiler);
         } catch (SoFTException e) {
             e.printStackTrace();
         }
     }
 
-    private void empfangenStatusnachrichten() {
 
+    private void empfangeStatusnachrichten() throws SoFTException {
+
+        // @debug
+        Msg m = form('s', "(2, 3, 3)");
+        statusnachrichten = Arrays.asList(receive("E", 1), receive("F", 1),
+                receive("G", 1), receive("H", 1), receive("I", 1),
+                receive("J", 1), m);
+            verarbeiteStatusnachrichten();
     }
 
 
-    private boolean checkFehlverhalten(String nachricht) {
+    private void verarbeiteStatusnachrichten() throws SoFTException {
+        for (Msg m : statusnachrichten) {
+            if (checkFehlverhalten(m)) {
+                sendeRekonfigurationsnachricht(m.getSe());
+                Msg nachricht = form('a', m.getCo());
+                nachricht.send(verteiler);
+            } else {
+                // TODO
+            }
+        }
+    }
+
+
+    private boolean checkFehlverhalten(Msg nachricht) {
         return false;
     }
 
 
-    private void sendeRekonfigurationsnachricht() {
+    private void sendeRekonfigurationsnachricht(char rechner) {
 
-    }
+        Msg nachricht = form('r', rechner);
 
-
-    private void sendeTerminierungsnachricht() {
-
-    }
-
-    private void terminate() {
-
+        // schicke Nachrichten
+        try {
+            nachricht.send(verteiler);
+        } catch (SoFTException e) {
+            e.printStackTrace();
+        }
     }
 }
 

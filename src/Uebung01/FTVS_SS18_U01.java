@@ -20,33 +20,38 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Random;
 
-import static SoFTlib.Helper.*;
-
 /**
  * Aufgabe 1a
  */
 class Auftragsknoten extends Node {
 
-    Random rando = new Random();
-    private static int AuftragsID = 0;
+    // Zufallsgenerator
+    private Random random = new Random();
+
+    // ID des aktuellen Auftrags
+    private static int auftragsID = 0;
 
     // Liste der Verteiler
-    String verteiler = "BCD";
+    private String verteiler = "BCD";
 
     // Liste der Auftraege
-    ArrayList<String> auftraege = new ArrayList<String>() {
-    };
+    private ArrayList<String> auftraege = new ArrayList<>();
 
     // Liste der Statusnachrichten
-    private List<Msg> statusnachrichten;
+    private ArrayList<Msg> statusnachrichten = new ArrayList<>();
 
 
+    /**
+     * Hauptmethode.
+     *
+     * @param input optionale Eingabe
+     * @return
+     */
     public String runNode(String input) throws SoFTException {
         for (int i = 0; i <= 9; i++) {
             boolean flag = true;
             while (flag) {
-                long zeit = time();
-                if (zeit >= 300 * i) {
+                if (time() >= 300 * i) {
                     sendeAuftraege();
                     flag = false;
                 } else {
@@ -59,40 +64,39 @@ class Auftragsknoten extends Node {
         Msg terminate = form('t', "");
         terminate.send(verteiler + "EFGHIJ");
 
-        return "1";
+        return "0";
     }
 
 
     /**
-     * Erzeugt neue Auftraege und schreibt sie in die Liste der Auftraege
+     * Erzeugt neue Auftraege und schreibt sie in die Liste der Auftraege.
      *
      * @return neue Auftraege
      */
     private String erzeugeAuftraege() {
-        int anzahlAuftraege = (rando.nextInt((6 - 1) + 1) + 1);
+        int anzahlAuftraege = (random.nextInt((6 - 1) + 1) + 1);
 
-        String a = "(";
+        StringBuilder a = new StringBuilder("(");
 
         for (int i = 0; i < anzahlAuftraege; ++i) {
             if (i > 0) {
-                a += " ; ";
+                a.append(" ; ");
             }
-            int aufwand = rando.nextInt((6 - 1) + 1) + 1;
-            a += ++AuftragsID + " 0 " + aufwand;
+            int aufwand = random.nextInt((6 - 1) + 1) + 1;
+            a.append(++auftragsID).append(" 0 ").append(aufwand);
 
-            String auftrag = "(" + AuftragsID + " 0 " + aufwand + ")";
+            String auftrag = "(" + auftragsID + " 0 " + aufwand + ")";
             auftraege.add(auftrag);
         }
-
-        // @debug
-        for (String s : auftraege) {
-            System.out.println(s);
-        }
-
         return a + ")";
     }
 
+
+    /**
+     * Sendet erzeugte Auftrage zu den Verteilern.
+     */
     private void sendeAuftraege() {
+
         // erzeuge neue Auftraege
         String auftraege = erzeugeAuftraege();
 
@@ -108,14 +112,29 @@ class Auftragsknoten extends Node {
     }
 
 
+    /**
+     * Empfängt Statusnachrichten von den Rechnern und speichert diese.
+     */
     private void empfangeStatusnachrichten() throws SoFTException {
 
-        // @debug
-        Msg m = form('s', "(2, 3, 3)");
-        statusnachrichten = Arrays.asList(receive("E", 1), receive("F", 1),
-                receive("G", 1), receive("H", 1), receive("I", 1),
-                receive("J", 1), m);
-            verarbeiteStatusnachrichten();
+        // FIXME: adapt timeout
+        // empfange Nachrichten von Rechnern
+        Msg statusE = receive("E", time() + 1);
+        Msg statusF = receive("F", time() + 1);
+        Msg statusG = receive("G", time() + 1);
+        Msg statusH = receive("H", time() + 1);
+        Msg statusI = receive("I", time() + 1);
+        Msg statusJ = receive("J", time() + 1);
+
+        // füge Statusnachrichten zur Liste hinzu
+        statusnachrichten.add(statusE);
+        statusnachrichten.add(statusF);
+        statusnachrichten.add(statusG);
+        statusnachrichten.add(statusH);
+        statusnachrichten.add(statusI);
+        statusnachrichten.add(statusJ);
+
+        verarbeiteStatusnachrichten();
     }
 
 
@@ -132,16 +151,23 @@ class Auftragsknoten extends Node {
     }
 
 
+    // TODO
     private boolean checkFehlverhalten(Msg nachricht) {
         return false;
     }
 
 
+    /**
+     * Erzeugt und sendet Rekonfigurationsnachrichten and die Verteiler.
+     *
+     * @param rechner der defekte Rechner
+     */
     private void sendeRekonfigurationsnachricht(char rechner) {
 
+        // generiere Rekonfigurationsnachricht
         Msg nachricht = form('r', rechner);
 
-        // schicke Nachrichten
+        // schicke Nachricht
         try {
             nachricht.send(verteiler);
         } catch (SoFTException e) {
@@ -150,20 +176,60 @@ class Auftragsknoten extends Node {
     }
 }
 
+
 /**
  * Aufgabe 1b
  */
 class Verteiler extends Node {
 
     private abstrakterRechner[] rechner;
+    private Msg auftrag;
+    private Msg rekonfiguration;
+    private Msg terminate;
 
     public Verteiler(abstrakterRechner[] rechner) {
         this.rechner = rechner;
     }
 
     public String runNode(String input) throws SoFTException {
+        while (time() < 3000) {
+            auftrag = receive("A", 'a', time() + 1);
+            rekonfiguration = receive("A", 'r', time() + 1);
+            terminate = receive("A", 't', time() + 1);
 
-        return "";
+            // wenn Terminierungsnachricht empfangen
+            if (terminate != null) {
+                return "0";
+            }
+
+            // wenn Auftragsnachricht empfangen
+            if (auftrag != null) {
+
+                // @debug
+                System.out.println(auftrag.getCo());
+
+                verteileAuftrag();
+            }
+
+            // wenn Rekonfigurationsnachricht empfangen
+            if (rekonfiguration != null) {
+
+                // @debug
+                System.out.println(rekonfiguration.getCo());
+
+                rekonfiguriere();
+            }
+        }
+
+        return "0";
+    }
+
+    private void verteileAuftrag() {
+
+    }
+
+    private void rekonfiguriere() {
+
     }
 }
 
@@ -194,14 +260,14 @@ class Rechner extends abstrakterRechner {
 
     public String runNode(String input) throws SoFTException {
 
-        return "";
+        return "0";
     }
 }
 
 public class FTVS_SS18_U01 extends SoFT {
 
     public int result(String input, String[] output) {
-        return 5;
+        return 0;
     }
 
     public static void main(String[] args) {

@@ -37,12 +37,11 @@ class Auftragsknoten extends Node {
 
 
     public String runNode(String input) throws SoFTException {
-        long start = time();
         for (int i = 0; i <= 9; i++) {
             boolean flag = true;
             while (flag) {
                 long zeit = time();
-                if (zeit >= start + 300 * i) {
+                if (zeit >= 300 * i) {
                     sendeAuftraege();
                     flag = false;
                 } else {
@@ -85,7 +84,7 @@ class Auftragsknoten extends Node {
         receive("J", 1);
     }
 
-    //TODO
+
     private void sendeAuftraege() {
         // erzeuge neue Auftraege
         String auftraege = erzeugeAuftraege();

@@ -24,37 +24,37 @@ import java.util.*;
  */
 class Auftragsknoten extends Node {
 
-    // Zufallsgenerator
+    // random generator
     private Random random = new Random();
 
-    // ID des aktuellen Auftrags
-    private static int auftragsID = 0;
+    // ID of the the current order
+    private static int orderID = 0;
 
-    // Liste der Verteiler
-    private String verteiler = "BCD";
+    // list of distributors
+    private String distributors = "BCD";
 
-    // Liste der Auftraege
-    private ArrayList<String> auftraege = new ArrayList<>();
+    // list of orders
+    private ArrayList<String> orders = new ArrayList<>();
 
-    // Liste der Statusnachrichten
-    private ArrayList<Msg> statusnachrichten = new ArrayList<>();
+    // list of status messages
+    private ArrayList<Msg> statusMessages = new ArrayList<>();
 
 
     /**
-     * Hauptmethode.
+     * Main method, runs the Auftragsknoten.
      *
-     * @param input optionale Eingabe
-     * @return
+     * @param input optional input
+     * @return 0 if executed properly
      */
     public String runNode(String input) throws SoFTException {
         for (int i = 0; i <= 9; i++) {
             boolean flag = true;
             while (flag) {
                 if (time() >= 300 * i) {
-                    sendeAuftraege();
+                    sendOrders();
                     flag = false;
                 } else {
-                    empfangeStatusnachrichten();
+                    receiveStatusMessages();
                 }
             }
         }
@@ -66,52 +66,54 @@ class Auftragsknoten extends Node {
             e.printStackTrace();
         }
 
-        // generiere Terminierungsnachricht und sende sie an die restlichen Rechner
-        Msg terminate = form('t', "");
-        terminate.send(verteiler + "EFGHIJ");
+        // generate and send message to terminate other computers
+        form('t', "").send(distributors + "EFGHIJ");
 
         return "0";
     }
 
 
     /**
-     * Erzeugt neue Auftraege und schreibt sie in die Liste der Auftraege.
+     * Creates new orders and stores them in the list
      *
-     * @return neue Auftraege
+     * @return the created orders
      */
-    private String erzeugeAuftraege() {
-        int anzahlAuftraege = (random.nextInt((6 - 1) + 1) + 1);
+    private String createOrders() {
+
+        // determine number of orders randomly
+        int numberOfOrders = (random.nextInt((6 - 1) + 1) + 1);
 
         StringBuilder a = new StringBuilder("(");
 
-        for (int i = 0; i < anzahlAuftraege; ++i) {
+        for (int i = 0; i < numberOfOrders; ++i) {
             if (i > 0) {
                 a.append(" ; ");
             }
-            int aufwand = random.nextInt((6 - 1) + 1) + 1;
-            a.append(++auftragsID).append(" 0 ").append(aufwand);
 
-            String auftrag = "(" + auftragsID + " 0 " + aufwand + ")";
-            auftraege.add(auftrag);
+            // determine workload randomly
+            int workload = random.nextInt((6 - 1) + 1) + 1;
+
+            a.append(++orderID).append(" 0 ").append(workload);
+
+            // store order in list
+            String order = "(" + orderID + " 0 " + workload + ")";
+            orders.add(order);
         }
         return a + ")";
     }
 
 
     /**
-     * Sendet erzeugte Auftrage zu den Verteilern.
+     * Sends creates orders to the distributors.
      */
-    private void sendeAuftraege() {
+    private void sendOrders() {
 
-        // erzeuge neue Auftraege
-        String auftraege = erzeugeAuftraege();
+        // create new orders
+        String orders = createOrders();
 
-        // generiere Nachricht
-        Msg nachricht = form('a', auftraege);
-
-        // schicke Nachrichten
+        // generate message and send it to distributors
         try {
-            nachricht.send(verteiler);
+            form('a', orders).send(distributors);
         } catch (SoFTException e) {
             e.printStackTrace();
         }
@@ -119,12 +121,12 @@ class Auftragsknoten extends Node {
 
 
     /**
-     * Empfängt Statusnachrichten von den Rechnern und speichert diese.
+     * Receives status messages and stores them.
      */
-    private void empfangeStatusnachrichten() throws SoFTException {
+    private void receiveStatusMessages() throws SoFTException {
 
         // FIXME: adapt timeout
-        // empfange Nachrichten von Rechnern
+        // receive messages
         Msg statusE = receive("E", time() + 50);
         Msg statusF = receive("F", time() + 50);
         Msg statusG = receive("G", time() + 50);
@@ -132,24 +134,24 @@ class Auftragsknoten extends Node {
         Msg statusI = receive("I", time() + 50);
         Msg statusJ = receive("J", time() + 50);
 
-        // füge Statusnachrichten zur Liste hinzu
-        statusnachrichten.add(statusE);
-        statusnachrichten.add(statusF);
-        statusnachrichten.add(statusG);
-        statusnachrichten.add(statusH);
-        statusnachrichten.add(statusI);
-        statusnachrichten.add(statusJ);
+        // store message
+        statusMessages.add(statusE);
+        statusMessages.add(statusF);
+        statusMessages.add(statusG);
+        statusMessages.add(statusH);
+        statusMessages.add(statusI);
+        statusMessages.add(statusJ);
 
-        verarbeiteStatusnachrichten();
+        processStatusMessages();
     }
 
 
-    private void verarbeiteStatusnachrichten() throws SoFTException {
-        for (Msg m : statusnachrichten) {
-            if (checkFehlverhalten(m)) {
-                sendeRekonfigurationsnachricht(m.getSe());
+    private void processStatusMessages() throws SoFTException {
+        for (Msg m : statusMessages) {
+            if (checkForFaults(m)) {
+                sendReconfigurationMessage(m.getSe());
                 Msg nachricht = form('a', m.getCo());
-                nachricht.send(verteiler);
+                nachricht.send(distributors);
             } else {
                 // TODO
             }
@@ -158,24 +160,19 @@ class Auftragsknoten extends Node {
 
 
     // TODO
-    private boolean checkFehlverhalten(Msg nachricht) {
+    private boolean checkForFaults(Msg message) {
         return false;
     }
 
 
     /**
-     * Erzeugt und sendet Rekonfigurationsnachrichten and die Verteiler.
+     * Creates and sends a reconfiguration message to the distributors.
      *
-     * @param rechner der defekte Rechner
+     * @param computer the faulty computer
      */
-    private void sendeRekonfigurationsnachricht(char rechner) {
-
-        // generiere Rekonfigurationsnachricht
-        Msg nachricht = form('r', rechner);
-
-        // schicke Nachricht
+    private void sendReconfigurationMessage(char computer) {
         try {
-            nachricht.send(verteiler);
+            form('r', computer).send(distributors);
         } catch (SoFTException e) {
             e.printStackTrace();
         }
@@ -189,6 +186,8 @@ class Auftragsknoten extends Node {
 class Verteiler extends Node {
 
     private abstrakterRechner[] rechner;
+
+    // stores the orders
     private ArrayList<String> orderList = new ArrayList<>();
 
     public Verteiler(abstrakterRechner[] rechner) {
@@ -201,31 +200,35 @@ class Verteiler extends Node {
             // FIXME: adapt timeout
             // receive a, t or r messages
             Msg order = receive("A", 'a', time() + 50);
-            Msg rekonfiguration = receive("A", 'r', time() + 50);
+            Msg reconfiguration = receive("A", 'r', time() + 50);
             Msg terminate = receive("A", 't', time() + 50);
 
-            // wenn Rekonfigurationsnachricht empfangen
-            if (rekonfiguration != null) {
+            // reconfiguration message received
+            if (reconfiguration != null) {
 
                 // @debug
-                say(rekonfiguration.getCo());
+                say(reconfiguration.getCo());
 
-                reconfigurate();
+                reconfigurate(reconfiguration);
             }
 
-            // wenn Auftragsnachricht empfangen
+            // order received
             if (order != null) {
                 distributeOrder(order);
-                order = null;
             }
 
-            // wenn Terminierungsnachricht empfangen
+            // termination message received
             if (terminate != null) {
                 return "0";
             }
         }
     }
 
+
+    /**
+     * Distributes message to the computers.
+     * @param message the message to distribute
+     */
     private void distributeOrder(Msg message) {
         String tmp = message.getCo();
 
@@ -240,15 +243,17 @@ class Verteiler extends Node {
             orderList.add(words(tmp, i, 1, 3));
         }
 
-        ArrayList<abstrakterRechner> rechnerList = new ArrayList<>();
+        // temporary list of computers
+        ArrayList<abstrakterRechner> computerList = new ArrayList<>();
 
-        for(abstrakterRechner ar : rechner) {
-            if(ar.getStatus()) {
-                rechnerList.add(ar);
+        // add active computers to temporary list
+        for (abstrakterRechner ar : rechner) {
+            if (ar.getStatus()) {
+                computerList.add(ar);
             }
         }
 
-        while(!orderList.isEmpty()) {
+        while (!orderList.isEmpty()) {
 
             // get maximum workload
             int max = 0;
@@ -261,25 +266,16 @@ class Verteiler extends Node {
 
             // get order with minimum workout, send it and then delete it
             for (String s : orderList) {
-                if(s != null) {
+                if (s != null) {
                     int u = Integer.parseInt(words(s, 1, 3, 3));
                     if (u == max) {
-                        rechnerList.remove(sendOrder(s, rechnerList));
-
-                        // FIXME
-                        // @debug
-                        for (abstrakterRechner as : rechnerList) {
-                            System.out.println(as.getID());
-                        }
-                        System.out.println("");
-
-                        if (rechnerList.isEmpty()) {
-                            for(abstrakterRechner ar : rechner) {
-                                if(ar.getStatus()) {
-                                    rechnerList.add(ar);
+                        computerList.remove(sendOrder(s, computerList));
+                        if (computerList.isEmpty()) {
+                            for (abstrakterRechner ar : rechner) {
+                                if (ar.getStatus()) {
+                                    computerList.add(ar);
                                 }
                             }
-                            System.out.println("erneuert");
                         }
                         orderList.remove(s);
                         break;
@@ -295,8 +291,8 @@ class Verteiler extends Node {
         abstrakterRechner strongestBoi = null;
         int howStrongIsBoi = 41;
 
-        for(abstrakterRechner as : rechnerList) {
-            if(as.getGeschwindigkeit() < howStrongIsBoi && as.getStatus()) {
+        for (abstrakterRechner as : rechnerList) {
+            if (as.getGeschwindigkeit() < howStrongIsBoi && as.getStatus()) {
                 howStrongIsBoi = as.getGeschwindigkeit();
                 strongestBoi = as;
             }
@@ -304,7 +300,7 @@ class Verteiler extends Node {
 
         if (strongestBoi != null) {
 
-            //senden
+            // send order
             Msg order = form('a', message);
             try {
                 order.send(strongestBoi.getID());
@@ -315,10 +311,21 @@ class Verteiler extends Node {
         return strongestBoi;
     }
 
-    private void reconfigurate() {
 
+    /**
+     * Marks a computer as inactive.
+     *
+     * @param message the reconfiguration message
+     */
+    private void reconfigurate(Msg message) {
+        for (abstrakterRechner ar : rechner) {
+            if (ar.getID().equals(message.getCo())) {
+                ar.setStatus(false);
+            }
+        }
     }
 }
+
 
 /**
  * Diese abstrakte Klasse soll lediglich dazu dienen, eine Schnittstelle mit Informationen
@@ -328,7 +335,6 @@ abstract class abstrakterRechner extends Node {
     private String id;
     private int geschwindigkeit;
     private boolean status;
-
     public abstrakterRechner(String id, int geschwindigkeit, boolean status) {
         this.id = id;
         this.geschwindigkeit = geschwindigkeit;
@@ -365,28 +371,51 @@ class Rechner extends abstrakterRechner {
         while (true) {
 
             // FIXME: adapt timeout
+            // receive messages
             Msg terminate = receive("A", 't', time() + 50);
             Msg order = receive("BCD", 'a', time() + 50);
 
+            // order received
             if (order != null) {
                 work();
+                sendStatusMessage(order);
             }
 
+            // termination message received
             if (terminate != null) {
                 return "0";
             }
         }
     }
 
-    private void work() {
 
+    /**
+     * Simulates work by putting the thread to sleep.
+     */
+    private void work() {
+        try {
+            Thread.sleep(this.getGeschwindigkeit());
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void sendStatusMessage(Msg order) {
+        String content = order.getCo();
+
+        // TODO: decrease steps
+        try {
+            form('s', content).send("A");
+        } catch (SoFTException e) {
+            e.printStackTrace();
+        }
     }
 }
 
 public class FTVS_SS18_U01 extends SoFT {
 
+    // TODO
     public int result(String input, String[] output) {
-
         return 0;
     }
 

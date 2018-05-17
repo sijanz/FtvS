@@ -303,7 +303,7 @@ class Verteiler extends Node {
             // send order
             Msg order = form('a', message);
             try {
-                order.send(strongestBoi.getID());
+                order.send(strongestBoi.myChar());
             } catch (SoFTException e) {
                 e.printStackTrace();
             }
@@ -319,7 +319,7 @@ class Verteiler extends Node {
      */
     private void reconfigurate(Msg message) {
         for (abstrakterRechner ar : rechner) {
-            if (ar.getID().equals(message.getCo())) {
+            if (ar.myChar() == message.getCo().charAt(0)) {
                 ar.setStatus(false);
             }
         }
@@ -332,11 +332,9 @@ class Verteiler extends Node {
  * bereitzustellen, welche von anderen Knoten gelesen werden darf.
  */
 abstract class abstrakterRechner extends Node {
-    private String id;
     private int geschwindigkeit;
     private boolean status;
-    public abstrakterRechner(String id, int geschwindigkeit, boolean status) {
-        this.id = id;
+    public abstrakterRechner(int geschwindigkeit, boolean status) {
         this.geschwindigkeit = geschwindigkeit;
         this.status = status;
     }
@@ -352,10 +350,6 @@ abstract class abstrakterRechner extends Node {
     public boolean getStatus() {
         return status;
     }
-
-    public String getID() {
-        return id;
-    }
 }
 
 /**
@@ -363,8 +357,8 @@ abstract class abstrakterRechner extends Node {
  */
 class Rechner extends abstrakterRechner {
 
-    public Rechner(String id, int geschwindigkeit, boolean status) {
-        super(id, geschwindigkeit, status);
+    public Rechner(int geschwindigkeit, boolean status) {
+        super(geschwindigkeit, status);
     }
 
     public String runNode(String input) throws SoFTException {
@@ -420,8 +414,8 @@ public class FTVS_SS18_U01 extends SoFT {
     }
 
     public static void main(String[] args) {
-        abstrakterRechner[] rechner = new abstrakterRechner[]{new Rechner("E", 40, true), new Rechner("F", 10, true),
-                new Rechner("G", 25, true), new Rechner("H", 15, true), new Rechner("I", 35, false), new Rechner("J", 10, false)};
+        abstrakterRechner[] rechner = new abstrakterRechner[]{new Rechner(40, true), new Rechner(10, true),
+                new Rechner(25, true), new Rechner(15, true), new Rechner(35, false), new Rechner(10, false)};
         Verteiler[] verteiler = new Verteiler[]{new Verteiler(rechner), new Verteiler(rechner),
                 new Verteiler(rechner)};
         Node[] system = new Node[]{new Auftragsknoten(), verteiler[0], verteiler[1], verteiler[2],

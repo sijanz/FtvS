@@ -15,8 +15,9 @@ package Uebung01;
 
 import SoFTlib.*;
 
-import java.util.ArrayList;
-import java.util.Random;
+import static SoFTlib.Helper.*;
+
+import java.util.*;
 
 /**
  * Aufgabe 1a
@@ -58,12 +59,16 @@ class Auftragsknoten extends Node {
             }
         }
 
+        // give other threads time to finish before calling terminate
+        try {
+            Thread.sleep(50);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
         // generiere Terminierungsnachricht und sende sie an die restlichen Rechner
         Msg terminate = form('t', "");
         terminate.send(verteiler + "EFGHIJ");
-
-        // @debug
-        say("terminating");
 
         return "0";
     }
@@ -120,12 +125,12 @@ class Auftragsknoten extends Node {
 
         // FIXME: adapt timeout
         // empfange Nachrichten von Rechnern
-        Msg statusE = receive("E", time() + 1);
-        Msg statusF = receive("F", time() + 1);
-        Msg statusG = receive("G", time() + 1);
-        Msg statusH = receive("H", time() + 1);
-        Msg statusI = receive("I", time() + 1);
-        Msg statusJ = receive("J", time() + 1);
+        Msg statusE = receive("E", time() + 50);
+        Msg statusF = receive("F", time() + 50);
+        Msg statusG = receive("G", time() + 50);
+        Msg statusH = receive("H", time() + 50);
+        Msg statusI = receive("I", time() + 50);
+        Msg statusJ = receive("J", time() + 50);
 
         // füge Statusnachrichten zur Liste hinzu
         statusnachrichten.add(statusE);
@@ -184,37 +189,20 @@ class Auftragsknoten extends Node {
 class Verteiler extends Node {
 
     private abstrakterRechner[] rechner;
+    private ArrayList<String> orderList = new ArrayList<>();
 
     public Verteiler(abstrakterRechner[] rechner) {
         this.rechner = rechner;
     }
 
     public String runNode(String input) throws SoFTException {
-        while (time() < 3000) {
+        while (true) {
 
             // FIXME: adapt timeout
-            Msg auftrag = receive("A", 'a', time() + 1);
-            Msg rekonfiguration = receive("A", 'r', time() + 1);
-            Msg terminate = receive("A", 't', time() + 1);
-
-            // wenn Terminierungsnachricht empfangen
-            if (terminate != null) {
-
-                // @debug
-                say("terminating");
-
-                return "0";
-            }
-
-            // wenn Auftragsnachricht empfangen
-            if (auftrag != null) {
-
-                // @debug
-                say(auftrag.getCo());
-
-                verteileAuftrag();
-                auftrag = null;
-            }
+            // receive a, t or r messages
+            Msg order = receive("A", 'a', time() + 50);
+            Msg rekonfiguration = receive("A", 'r', time() + 50);
+            Msg terminate = receive("A", 't', time() + 50);
 
             // wenn Rekonfigurationsnachricht empfangen
             if (rekonfiguration != null) {
@@ -222,18 +210,112 @@ class Verteiler extends Node {
                 // @debug
                 say(rekonfiguration.getCo());
 
-                rekonfiguriere();
+                reconfigurate();
+            }
+
+            // wenn Auftragsnachricht empfangen
+            if (order != null) {
+                distributeOrder(order);
+                order = null;
+            }
+
+            // wenn Terminierungsnachricht empfangen
+            if (terminate != null) {
+                return "0";
+            }
+        }
+    }
+
+    private void distributeOrder(Msg message) {
+        String tmp = message.getCo();
+
+        // get rid of brackets
+        tmp = tmp.replace("(", "");
+        tmp = tmp.replace(")", "");
+
+        int wordCount = getItemCount(tmp);
+
+        // add orders to order list
+        for (int i = 1; i <= wordCount; ++i) {
+            orderList.add(words(tmp, i, 1, 3));
+        }
+
+        ArrayList<abstrakterRechner> rechnerList = new ArrayList<>();
+
+        for(abstrakterRechner ar : rechner) {
+            if(ar.getStatus()) {
+                rechnerList.add(ar);
             }
         }
 
-        return "0";
+        while(!orderList.isEmpty()) {
+
+            // get maximum workload
+            int max = 0;
+            for (String s : orderList) {
+                int u = Integer.parseInt(words(s, 1, 3, 3));
+                if (u > max) {
+                    max = u;
+                }
+            }
+
+            // get order with minimum workout, send it and then delete it
+            for (String s : orderList) {
+                if(s != null) {
+                    int u = Integer.parseInt(words(s, 1, 3, 3));
+                    if (u == max) {
+                        rechnerList.remove(sendOrder(s, rechnerList));
+
+                        // FIXME
+                        // @debug
+                        for (abstrakterRechner as : rechnerList) {
+                            System.out.println(as.getID());
+                        }
+                        System.out.println("");
+
+                        if (rechnerList.isEmpty()) {
+                            for(abstrakterRechner ar : rechner) {
+                                if(ar.getStatus()) {
+                                    rechnerList.add(ar);
+                                }
+                            }
+                            System.out.println("erneuert");
+                        }
+                        orderList.remove(s);
+                        break;
+                    }
+                }
+            }
+        }
     }
 
-    private void verteileAuftrag() {
+    // TODO
+    private abstrakterRechner sendOrder(String message, ArrayList<abstrakterRechner> rechnerList) {
 
+        abstrakterRechner strongestBoi = null;
+        int howStrongIsBoi = 41;
+
+        for(abstrakterRechner as : rechnerList) {
+            if(as.getGeschwindigkeit() < howStrongIsBoi && as.getStatus()) {
+                howStrongIsBoi = as.getGeschwindigkeit();
+                strongestBoi = as;
+            }
+        }
+
+        if (strongestBoi != null) {
+
+            //senden
+            Msg order = form('a', message);
+            try {
+                order.send(strongestBoi.getID());
+            } catch (SoFTException e) {
+                e.printStackTrace();
+            }
+        }
+        return strongestBoi;
     }
 
-    private void rekonfiguriere() {
+    private void reconfigurate() {
 
     }
 }
@@ -243,14 +325,30 @@ class Verteiler extends Node {
  * bereitzustellen, welche von anderen Knoten gelesen werden darf.
  */
 abstract class abstrakterRechner extends Node {
+    private String id;
     private int geschwindigkeit;
+    private boolean status;
 
-    public abstrakterRechner(int geschwindigkeit) {
+    public abstrakterRechner(String id, int geschwindigkeit, boolean status) {
+        this.id = id;
         this.geschwindigkeit = geschwindigkeit;
+        this.status = status;
     }
 
     public int getGeschwindigkeit() {
         return geschwindigkeit;
+    }
+
+    public void setStatus(boolean status) {
+        this.status = status;
+    }
+
+    public boolean getStatus() {
+        return status;
+    }
+
+    public String getID() {
+        return id;
     }
 }
 
@@ -259,37 +357,42 @@ abstract class abstrakterRechner extends Node {
  */
 class Rechner extends abstrakterRechner {
 
-    public Rechner(int geschwindigkeit) {
-        super(geschwindigkeit);
+    public Rechner(String id, int geschwindigkeit, boolean status) {
+        super(id, geschwindigkeit, status);
     }
 
     public String runNode(String input) throws SoFTException {
-        while (time() < 3000) {
+        while (true) {
 
             // FIXME: adapt timeout
-            Msg terminate = receive("A", 't', time() + 1);
+            Msg terminate = receive("A", 't', time() + 50);
+            Msg order = receive("BCD", 'a', time() + 50);
+
+            if (order != null) {
+                work();
+            }
 
             if (terminate != null) {
-
-                // @debug
-                say("terminating");
-
                 return "0";
             }
         }
-        return "0";
+    }
+
+    private void work() {
+
     }
 }
 
 public class FTVS_SS18_U01 extends SoFT {
 
     public int result(String input, String[] output) {
+
         return 0;
     }
 
     public static void main(String[] args) {
-        abstrakterRechner[] rechner = new abstrakterRechner[]{new Rechner(40), new Rechner(10),
-                new Rechner(25), new Rechner(15), new Rechner(35), new Rechner(10)};
+        abstrakterRechner[] rechner = new abstrakterRechner[]{new Rechner("E", 40, true), new Rechner("F", 10, true),
+                new Rechner("G", 25, true), new Rechner("H", 15, true), new Rechner("I", 35, false), new Rechner("J", 10, false)};
         Verteiler[] verteiler = new Verteiler[]{new Verteiler(rechner), new Verteiler(rechner),
                 new Verteiler(rechner)};
         Node[] system = new Node[]{new Auftragsknoten(), verteiler[0], verteiler[1], verteiler[2],

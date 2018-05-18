@@ -36,10 +36,6 @@ class Auftragsknoten extends Node {
     // list of orders
     private ArrayList<String> orders = new ArrayList<>();
 
-    // list of status messages
-    private ArrayList<Msg> statusMessages = new ArrayList<>();
-
-
     /**
      * Main method, runs the Auftragsknoten.
      *
@@ -47,7 +43,7 @@ class Auftragsknoten extends Node {
      * @return 0 if executed properly
      */
     public String runNode(String input) throws SoFTException {
-        for (int i = 0; i <= 9; i++) {
+        for (int i = 0; i <= 9 /* TODO */; i++) {
             boolean flag = true;
             while (flag) {
                 if (time() >= 300 * i) {
@@ -60,10 +56,22 @@ class Auftragsknoten extends Node {
         }
 
         // give other threads time to finish before calling terminate
-        try {
-            Thread.sleep(50);
-        } catch (Exception e) {
-            e.printStackTrace();
+        //TODO needs to depend on orders list
+
+        /*
+        // @debug
+        System.out.println("order list");
+        for (String s : orders) {
+            System.out.println(s);
+        }
+        System.out.println(); */
+
+        boolean flag = true;
+        while (flag) {
+            receiveStatusMessages();
+            if (orders.isEmpty()) {
+                flag = false;
+            }
         }
 
         // generate and send message to terminate other computers
@@ -83,7 +91,7 @@ class Auftragsknoten extends Node {
         // determine number of orders randomly
         int numberOfOrders = (random.nextInt((6 - 1) + 1) + 1);
 
-        StringBuilder a = new StringBuilder("(");
+        StringBuilder a = new StringBuilder("");
 
         for (int i = 0; i < numberOfOrders; ++i) {
             if (i > 0) {
@@ -96,10 +104,10 @@ class Auftragsknoten extends Node {
             a.append(++orderID).append(" 0 ").append(workload);
 
             // store order in list
-            String order = "(" + orderID + " 0 " + workload + ")";
+            String order = orderID + " 0 " + workload;
             orders.add(order);
         }
-        return a + ")";
+        return a + "";
     }
 
 
@@ -109,11 +117,11 @@ class Auftragsknoten extends Node {
     private void sendOrders() {
 
         // create new orders
-        String orders = createOrders();
+        String order = createOrders();
 
         // generate message and send it to distributors
         try {
-            form('a', orders).send(distributors);
+            form('a', order).send(distributors);
         } catch (SoFTException e) {
             e.printStackTrace();
         }
@@ -125,45 +133,105 @@ class Auftragsknoten extends Node {
      */
     private void receiveStatusMessages() throws SoFTException {
 
-        // FIXME: adapt timeout
         // receive messages
-        Msg statusE = receive("E", time() + 50);
-        Msg statusF = receive("F", time() + 50);
-        Msg statusG = receive("G", time() + 50);
-        Msg statusH = receive("H", time() + 50);
-        Msg statusI = receive("I", time() + 50);
-        Msg statusJ = receive("J", time() + 50);
+        Msg statusE = receive("E", time() + 10);
+        Msg statusF = receive("F", time() + 10);
+        Msg statusG = receive("G", time() + 10);
+        Msg statusH = receive("H", time() + 10);
+        Msg statusI = receive("I", time() + 10);
+        Msg statusJ = receive("J", time() + 10);
 
-        // store message
-        statusMessages.add(statusE);
-        statusMessages.add(statusF);
-        statusMessages.add(statusG);
-        statusMessages.add(statusH);
-        statusMessages.add(statusI);
-        statusMessages.add(statusJ);
+        // store messages
+        if (statusE != null) {
+            processStatusMessage(statusE);
+        }
+        if (statusF != null) {
+            processStatusMessage(statusF);
+        }
+        if (statusG != null) {
+            processStatusMessage(statusG);
+        }
+        if (statusH != null) {
+            processStatusMessage(statusH);
+        }
+        if (statusI != null) {
+            processStatusMessage(statusI);
+        }
+        if (statusJ != null) {
+            processStatusMessage(statusJ);
+        }
+    }
 
-        processStatusMessages();
+    private void updateOrders(Msg msg) {
+        String s = msg.getCo();
+        int ID = number(s, 1);
+        int steps = number(s, 2);
+        int workload = number(s, 3);
+
+        String toAdd = null;
+        String toDelete = null;
+        for (String o : orders) {
+            if (number(o, 1) == ID) {
+                toDelete = o;
+                if (steps < workload) {
+                    toAdd = s;
+                }
+            }
+        }
+        orders.remove(toDelete);
+        if (toAdd != null) {
+            orders.add(toAdd);
+        }
     }
 
 
-    private void processStatusMessages() throws SoFTException {
-        for (Msg m : statusMessages) {
-            if (checkForFaults(m)) {
-                sendReconfigurationMessage(m.getSe());
-                Msg nachricht = form('a', m.getCo());
-                nachricht.send(distributors);
-            } else {
-                // TODO
+    private void processStatusMessage(Msg status) {
+        if (checkForFaults(status.getCo())) {
+            try {
+                form('r', status.getSe()).send(distributors);
+                sendLastMessage(number(status.getCo(), 1));
+            } catch (SoFTException e) {
+                e.printStackTrace();
             }
+        } else {
+            updateOrders(status);
         }
     }
 
 
     // TODO
-    private boolean checkForFaults(Msg message) {
+    private boolean checkForFaults(String message) {
+        int ID = number(message, 1);
+        int steps = number(message, 2);
+        int workload = number(message, 3);
+        boolean flag = false;
+
+        for (String s : orders) {
+            if (number(s, 1) == ID) {
+                flag = true;
+                if (steps == number(s, 2) + 1 && workload == number(s, 3)) {
+                    return false;
+                }
+            }
+        }
+        if (flag) {
+            return true;
+        }
         return false;
     }
 
+    private void sendLastMessage(int ID) {
+        for (String s : orders) {
+            if (number(s, 1) == ID) {
+                try {
+                    form('a', s).send(distributors);
+                } catch (SoFTException e) {
+                    e.printStackTrace();
+                }
+                break;
+            }
+        }
+    }
 
     /**
      * Creates and sends a reconfiguration message to the distributors.
@@ -227,14 +295,11 @@ class Verteiler extends Node {
 
     /**
      * Distributes message to the computers.
+     *
      * @param message the message to distribute
      */
     private void distributeOrder(Msg message) {
         String tmp = message.getCo();
-
-        // get rid of brackets
-        tmp = tmp.replace("(", "");
-        tmp = tmp.replace(")", "");
 
         int wordCount = getItemCount(tmp);
 
@@ -318,10 +383,34 @@ class Verteiler extends Node {
      * @param message the reconfiguration message
      */
     private void reconfigurate(Msg message) {
+        int dif = 100;
+        abstrakterRechner id = null;
+        int faultisSpeed = 0;
+
         for (abstrakterRechner ar : rechner) {
             if (ar.myChar() == message.getCo().charAt(0)) {
+                faultisSpeed = ar.getGeschwindigkeit();
                 ar.setStatus(false);
+                break;
             }
+        }
+        for (abstrakterRechner ar : rechner) {
+            if (!ar.getStatus()) {
+                if (ar.getGeschwindigkeit() > faultisSpeed) {
+                    if (ar.getGeschwindigkeit() - faultisSpeed < dif) {
+                        dif = ar.getGeschwindigkeit() - faultisSpeed;
+                        id = ar;
+                    }
+                } else {
+                    if (faultisSpeed - ar.getGeschwindigkeit() < dif) {
+                        dif = ar.getGeschwindigkeit() - faultisSpeed;
+                        id = ar;
+                    }
+                }
+            }
+        }
+        if (id != null) {
+            id.setStatus(true);
         }
     }
 }
@@ -334,6 +423,7 @@ class Verteiler extends Node {
 abstract class abstrakterRechner extends Node {
     private int geschwindigkeit;
     private boolean status;
+
     public abstrakterRechner(int geschwindigkeit, boolean status) {
         this.geschwindigkeit = geschwindigkeit;
         this.status = status;
@@ -357,6 +447,13 @@ abstract class abstrakterRechner extends Node {
  */
 class Rechner extends abstrakterRechner {
 
+    private ArrayList<String> ordersB = new ArrayList<>();
+    private ArrayList<String> ordersC = new ArrayList<>();
+    private ArrayList<String> ordersD = new ArrayList<>();
+    private ArrayList<String> orderList = new ArrayList<>();
+    private ArrayList<String> removeList = new ArrayList<>();
+    private String remove = new String();
+
     public Rechner(int geschwindigkeit, boolean status) {
         super(geschwindigkeit, status);
     }
@@ -367,19 +464,98 @@ class Rechner extends abstrakterRechner {
             // FIXME: adapt timeout
             // receive messages
             Msg terminate = receive("A", 't', time() + 50);
-            Msg order = receive("BCD", 'a', time() + 50);
 
-            // order received
-            if (order != null) {
-                work();
-                sendStatusMessage(order);
+            //save orders
+            // FIXME: differentiate between distributors
+            Msg b = receive("B", 'a', time() + 50);
+            if (b != null) {
+                ordersB.add(b.getCo());
             }
+            Msg c = receive("C", 'a', time() + 50);
+            if (c != null) {
+                ordersC.add(c.getCo());
+            }
+            Msg d = receive("D", 'a', time() + 50);
+            if (d != null) {
+                ordersD.add(d.getCo());
+            }
+
+            //check 2 of 3
+            findOrders();
+
+            //work orders
+            for (String m : orderList) {
+                int ID = number(m, 1);
+                int steps = number(m, 2);
+                int workload = number(m, 3);
+                removeList.add(m);
+
+                while (steps < workload) {
+                    work();
+                    ++steps;
+                    String content = Integer.toString(ID) + " " + Integer.toString(steps) + " " + Integer.toString(workload);
+
+                    try {
+                        form('s', content).send("A");
+                    } catch (SoFTException e) {
+                        e.printStackTrace();
+                    }
+                }
+            }
+
+
+            for (String r : removeList) {
+                orderList.remove(r);
+            }
+            removeList.clear();
+
 
             // termination message received
             if (terminate != null) {
                 return "0";
             }
         }
+    }
+
+    private void findOrders() {
+        for (String b : ordersB) {
+            for (String c : ordersC) {
+                if (b.equals(c)) {
+                    orderList.add(b);
+                    removeList.add(b);
+                }
+            }
+        }
+        updateOrders();
+
+        for (String b : ordersB) {
+            for (String d : ordersD) {
+                if (b.equals(d)) {
+                    orderList.add(b);
+                    removeList.add(b);
+                }
+            }
+        }
+        updateOrders();
+
+        for (String c : ordersC) {
+            for (String d : ordersD) {
+                if (c.equals(d)) {
+                    orderList.add(c);
+                    removeList.add(c);
+                }
+            }
+        }
+        updateOrders();
+    }
+
+    private void updateOrders() {
+        for (String i : removeList) {
+            ordersB.remove(i);
+            ordersC.remove(i);
+            ordersD.remove(i);
+        }
+        removeList.clear();
     }
 
 
@@ -390,17 +566,6 @@ class Rechner extends abstrakterRechner {
         try {
             Thread.sleep(this.getGeschwindigkeit());
         } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
-
-    private void sendStatusMessage(Msg order) {
-        String content = order.getCo();
-
-        // TODO: decrease steps
-        try {
-            form('s', content).send("A");
-        } catch (SoFTException e) {
             e.printStackTrace();
         }
     }

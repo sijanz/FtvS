@@ -386,8 +386,8 @@ class Verteiler extends Node {
     // stores the orders
     private ArrayList<String> orderList = new ArrayList<>();
 
-    // map containing ID of order and the corresponding Rechner
-    private HashMap<Number, Character> ordersMap = new HashMap<>();
+    // list containing ID of order and the corresponding Rechner
+    private ArrayList<String> orderArray = new ArrayList<>();
 
     Verteiler(abstrakterRechner[] rechner) {
         this.rechner = rechner;
@@ -464,7 +464,9 @@ class Verteiler extends Node {
                         abstrakterRechner AR = sendOrder(o, computerList);
 
                         // add ID and Rechner to ordersMap
-                        ordersMap.put(number(o, 1), AR.myChar());
+                        if (orderArray != null && AR != null) {
+                            orderArray.add(number(o, 1) + " " + AR.myChar());
+                        }
 
                         // remove Rechner so that it is unable to receive another order
                         computerList.remove(AR);
@@ -529,21 +531,17 @@ class Verteiler extends Node {
      * Checks if an entry in the ordersMap is faulty.
      *
      * @param ID   the ID to check
-     * @param name the name of the Rechner to check
+     * @param NAME the name of the Rechner to check
      * @return true if faulty, false otherwise
      */
-    private boolean isFaulty(int ID, char name) {
-        Iterator it = ordersMap.entrySet().iterator();
-        while (it.hasNext()) {
-            HashMap.Entry pair = (HashMap.Entry) it.next();
+    private boolean isFaulty(int ID, char NAME) {
+        for (String o : orderArray) {
+            int id = number(o, 1);
+            char name = word(o, 2).charAt(0);
 
-            // found the entry
-            if (pair.getKey().equals(ID) && pair.getValue().equals(name)) {
+            if (id == ID && name == NAME) {
                 return true;
             }
-
-            // prevent Concurrent-Modification-Exception
-            it.remove();
         }
         return false;
     }
@@ -781,7 +779,7 @@ public class FTVS_SS18_U01 extends SoFT {
     public int result(String input, String[] output) {
 
         // run 200 times
-        if (exec() == 1) {
+        if (exec() == 50) {
 
             // print out results
             System.out.println("A: " + A);
@@ -789,6 +787,14 @@ public class FTVS_SS18_U01 extends SoFT {
             System.out.println("R: " + R);
             System.out.println("L: " + L);
             System.out.println("N: " + N);
+
+            System.out.println();
+
+            System.out.println("A0: " + A / 100);
+            System.out.println("E0: " + E / 100);
+            System.out.println("R0: " + R / 100);
+            System.out.println("L0: " + L / 100);
+            System.out.println("N0: " + N / 100);
 
             // terminate program
             System.exit(0);

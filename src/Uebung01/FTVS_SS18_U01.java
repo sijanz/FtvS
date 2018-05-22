@@ -34,7 +34,6 @@ class Auftragsknoten extends Node {
     // list of orders
     private ArrayList<String> orders = new ArrayList<>();
 
-    //TODO needs testing
     //list when order with orderID was last updated
     private long[][] updatedOrders = new long[60][2];
 
@@ -46,7 +45,7 @@ class Auftragsknoten extends Node {
      */
     public String runNode(String input) throws SoFTException {
 
-        int amountOfOrderBundles = 10;
+        int amountOfOrderBundles = 1;
 
         for (int i = 0; i < amountOfOrderBundles; i++) {
             boolean flag = true;
@@ -105,12 +104,12 @@ class Auftragsknoten extends Node {
             // store order in list
             String order = orderID + " 0 " + workload;
             orders.add(order);
-            //TODO needs testing
             //create new entry for new order
             for(int x = 0; x < updatedOrders.length; ++x) {
                if(updatedOrders[x][0] == 0) {
                    updatedOrders[x][0] = (long) orderID;
                    updatedOrders[x][1] = time();
+                   System.out.println("New Entry: " + updatedOrders[x][0] + " " + updatedOrders[x][1]);
                    break;
                 }
             }
@@ -143,12 +142,12 @@ class Auftragsknoten extends Node {
     private void receiveStatusMessages() throws SoFTException {
 
         // receive messages
-        Msg statusE = receive("E", time() + 10);
-        Msg statusF = receive("F", time() + 10);
-        Msg statusG = receive("G", time() + 10);
-        Msg statusH = receive("H", time() + 10);
-        Msg statusI = receive("I", time() + 10);
-        Msg statusJ = receive("J", time() + 10);
+        Msg statusE = receive("E", time() + 5);
+        Msg statusF = receive("F", time() + 5);
+        Msg statusG = receive("G", time() + 5);
+        Msg statusH = receive("H", time() + 5);
+        Msg statusI = receive("I", time() + 5);
+        Msg statusJ = receive("J", time() + 5);
 
         // store messages
         if (statusE != null) { processStatusMessage(statusE); }
@@ -161,25 +160,33 @@ class Auftragsknoten extends Node {
         checkTimeout();
     }
 
-    //TODO needs testing
     //checks for order timeouts, in case of no-message-error
     private void checkTimeout() {
+        String order = "";
+
         for(int i = 0; i < updatedOrders.length; ++i) {
-            if(updatedOrders[i][1] > time() + 100) {
-                //resend order
-                //TODO needs testing
+            if(updatedOrders[i][0] != 0 && time() > updatedOrders[i][1] + 500) {
+
+                // @debug
+                System.out.println("Resend Order " + updatedOrders[i][0] + " " + updatedOrders[i][1]);
                 for(String s : orders) {
                     if (number(s, 1) == updatedOrders[i][0]) {
-                        try {
-                            form('a', s).send(distributors);
-                            ++FTVS_SS18_U01.N;
-                        } catch (SoFTException e) {
-                            e.printStackTrace();
-                        }
+                        if(!order.equals("")) { order += " ; "; }
+                        order += s;
+                        break;
                     }
                 }
                 updatedOrders[i][1] = time();
             }
+        }
+
+        try {
+            if(!order.equals("")) {
+                form('a', order).send(distributors);
+                ++FTVS_SS18_U01.N;
+            }
+        } catch (SoFTException e) {
+            e.printStackTrace();
         }
     }
 
@@ -204,11 +211,11 @@ class Auftragsknoten extends Node {
         if (toAdd != null) {
             orders.add(toAdd);
 
-            //TODO needs testing
             //update time if order isn't completed yet
             for(int i = 0; i < updatedOrders.length; ++i) {
                 if(updatedOrders[i][0] == ID) {
                     updatedOrders[i][1] = time();
+                    System.out.println("Update Entry: " + updatedOrders[i][0] + " " + updatedOrders[i][1]);
                     break;
                 }
             }
@@ -217,10 +224,10 @@ class Auftragsknoten extends Node {
 
             ++FTVS_SS18_U01.E;
 
-            //TODO needs testing
             //delete entry if order is completed
             for(int i = 0; i < updatedOrders.length; ++i) {
                 if(updatedOrders[i][0] == ID) {
+                    System.out.println("Delete Entry: " + updatedOrders[i][0] + " " + updatedOrders[i][1]);
                     updatedOrders[i][0] = updatedOrders[i][1] = 0;
                     break;
                 }
@@ -287,6 +294,8 @@ class Verteiler extends Node {
     // stores the orders
     private ArrayList<String> orderList = new ArrayList<>();
 
+    HashMap<Number, Character> ordersMap = new HashMap<>();
+
     Verteiler(abstrakterRechner[] rechner) {
         this.rechner = rechner;
     }
@@ -296,9 +305,9 @@ class Verteiler extends Node {
 
             // FIXME: adapt timeout
             // receive a, t or r messages
-            Msg order = receive("A", 'a', time() + 50);
-            Msg reconfiguration = receive("A", 'r', time() + 50);
-            Msg terminate = receive("A", 't', time() + 50);
+            Msg order = receive("A", 'a', time() + 5);
+            Msg reconfiguration = receive("A", 'r', time() + 5);
+            Msg terminate = receive("A", 't', time() + 5);
 
             // reconfiguration message received
             if (reconfiguration != null) {
@@ -361,9 +370,12 @@ class Verteiler extends Node {
             // get order with minimum workout, send it and then delete it
             for (String s : orderList) {
                 if (s != null) {
-                    int u = Integer.parseInt(words(s, 1, 3, 3));
+                    int u = number(s, 3);
                     if (u == max) {
-                        computerList.remove(sendOrder(s, computerList));
+                        abstrakterRechner AR = sendOrder(s, computerList);
+                        ordersMap.put(number(s, 1), AR.myChar());
+                        computerList.remove(AR);
+
                         if (computerList.isEmpty()) {
                             for (abstrakterRechner ar : rechner) {
                                 if (ar.getStatus()) {
@@ -379,14 +391,13 @@ class Verteiler extends Node {
         }
     }
 
-    // TODO
     private abstrakterRechner sendOrder(String message, ArrayList<abstrakterRechner> rechnerList) {
 
         abstrakterRechner strongestBoi = null;
         int howStrongIsBoi = 41;
 
         for (abstrakterRechner as : rechnerList) {
-            if (as.getGeschwindigkeit() < howStrongIsBoi && as.getStatus()) {
+            if (as.getGeschwindigkeit() < howStrongIsBoi && as.getStatus() && !isFaulty(number(message, 1), as.myChar())) {
                 howStrongIsBoi = as.getGeschwindigkeit();
                 strongestBoi = as;
             }
@@ -404,6 +415,19 @@ class Verteiler extends Node {
             }
         }
         return strongestBoi;
+    }
+
+    boolean isFaulty(int ID, char name) {
+        Iterator it = ordersMap.entrySet().iterator();
+        while (it.hasNext()) {
+            HashMap.Entry pair = (HashMap.Entry) it.next();
+            System.out.println(pair.getKey() + " = " + pair.getValue());
+            it.remove();
+        }
+        System.out.println();
+
+
+        return false;
     }
 
 
@@ -493,19 +517,19 @@ class Rechner extends abstrakterRechner {
 
             // FIXME: adapt timeout
             // receive messages
-            Msg terminate = receive("A", 't', time() + 50);
+            Msg terminate = receive("A", 't', time() + 5);
 
             //save orders
             // FIXME: differentiate between distributors
-            Msg b = receive("B", 'a', time() + 50);
+            Msg b = receive("B", 'a', time() + 5);
             if (b != null) {
                 ordersB.add(b.getCo());
             }
-            Msg c = receive("C", 'a', time() + 50);
+            Msg c = receive("C", 'a', time() + 5);
             if (c != null) {
                 ordersC.add(c.getCo());
             }
-            Msg d = receive("D", 'a', time() + 50);
+            Msg d = receive("D", 'a', time() + 5);
             if (d != null) {
                 ordersD.add(d.getCo());
             }
@@ -611,7 +635,6 @@ public class FTVS_SS18_U01 extends SoFT {
     static int N = 0;
 
 
-    // TODO
     public int result(String input, String[] output) {
 
         // run 200 times
@@ -625,7 +648,7 @@ public class FTVS_SS18_U01 extends SoFT {
             System.out.println("N: " + N);
 
             // terminate program
-            System.exit(0);
+          //  System.exit(0);
         }
         return 0;
     }

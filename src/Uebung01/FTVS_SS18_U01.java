@@ -72,7 +72,9 @@ class Auftragsknoten extends Node {
 
         // generate and send message to terminate other computers
         form('t', "").send(distributors + "EFGHIJ");
+        ++FTVS_SS18_U01.N;
 
+        FTVS_SS18_U01.L += time();
         return "0";
     }
 
@@ -86,6 +88,7 @@ class Auftragsknoten extends Node {
 
         // determine number of orders randomly
         int numberOfOrders = (random.nextInt((6 - 1) + 1) + 1);
+        FTVS_SS18_U01.A += numberOfOrders;
 
         StringBuilder a = new StringBuilder("");
 
@@ -127,6 +130,7 @@ class Auftragsknoten extends Node {
         // generate message and send it to distributors
         try {
             form('a', order).send(distributors);
+            ++FTVS_SS18_U01.N;
         } catch (SoFTException e) {
             e.printStackTrace();
         }
@@ -168,6 +172,7 @@ class Auftragsknoten extends Node {
                     if (number(s, 1) == updatedOrders[i][0]) {
                         try {
                             form('a', s).send(distributors);
+                            ++FTVS_SS18_U01.N;
                         } catch (SoFTException e) {
                             e.printStackTrace();
                         }
@@ -210,6 +215,8 @@ class Auftragsknoten extends Node {
 
         } else {
 
+            ++FTVS_SS18_U01.E;
+
             //TODO needs testing
             //delete entry if order is completed
             for(int i = 0; i < updatedOrders.length; ++i) {
@@ -226,7 +233,9 @@ class Auftragsknoten extends Node {
         if (checkForFaults(status.getCo())) {
             try {
                 form('r', status.getSe()).send(distributors);
+                ++FTVS_SS18_U01.N;
                 sendLastMessage(number(status.getCo(), 1));
+                ++FTVS_SS18_U01.R;
             } catch (SoFTException e) {
                 e.printStackTrace();
             }
@@ -257,6 +266,7 @@ class Auftragsknoten extends Node {
             if (number(s, 1) == ID) {
                 try {
                     form('a', s).send(distributors);
+                    ++FTVS_SS18_U01.N;
                 } catch (SoFTException e) {
                     e.printStackTrace();
                 }
@@ -388,6 +398,7 @@ class Verteiler extends Node {
             Msg order = form('a', message);
             try {
                 order.send(strongestBoi.myChar());
+                ++FTVS_SS18_U01.N;
             } catch (SoFTException e) {
                 e.printStackTrace();
             }
@@ -516,6 +527,7 @@ class Rechner extends abstrakterRechner {
 
                     try {
                         form('s', content).send("A");
+                        ++FTVS_SS18_U01.N;
                     } catch (SoFTException e) {
                         e.printStackTrace();
                     }
@@ -592,8 +604,29 @@ class Rechner extends abstrakterRechner {
 
 public class FTVS_SS18_U01 extends SoFT {
 
+    static int A = 0;
+    static int E = 0;
+    static int R = 0;
+    static long L = 0;
+    static int N = 0;
+
+
     // TODO
     public int result(String input, String[] output) {
+
+        // run 200 times
+        if (exec() == 1) {
+
+            // print out results
+            System.out.println("A: " + A);
+            System.out.println("E: " + E);
+            System.out.println("R: " + R);
+            System.out.println("L: " + L);
+            System.out.println("N: " + N);
+
+            // terminate program
+            System.exit(0);
+        }
         return 0;
     }
 

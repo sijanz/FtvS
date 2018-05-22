@@ -14,9 +14,7 @@
 package Uebung01;
 
 import SoFTlib.*;
-
 import static SoFTlib.Helper.*;
-
 import java.util.*;
 
 /**
@@ -36,6 +34,10 @@ class Auftragsknoten extends Node {
     // list of orders
     private ArrayList<String> orders = new ArrayList<>();
 
+    //TODO needs testing
+    //list when order with orderID was last updated
+    private long[][] updatedOrders = new long[60][2];
+
     /**
      * Main method, runs the Auftragsknoten.
      *
@@ -43,7 +45,10 @@ class Auftragsknoten extends Node {
      * @return 0 if executed properly
      */
     public String runNode(String input) throws SoFTException {
-        for (int i = 0; i <= 9 /* TODO */; i++) {
+
+        int amountOfOrderBundles = 10;
+
+        for (int i = 0; i < amountOfOrderBundles; i++) {
             boolean flag = true;
             while (flag) {
                 if (time() >= 300 * i) {
@@ -56,15 +61,6 @@ class Auftragsknoten extends Node {
         }
 
         // give other threads time to finish before calling terminate
-        //TODO needs to depend on orders list
-
-        /*
-        // @debug
-        System.out.println("order list");
-        for (String s : orders) {
-            System.out.println(s);
-        }
-        System.out.println(); */
 
         boolean flag = true;
         while (flag) {
@@ -106,6 +102,15 @@ class Auftragsknoten extends Node {
             // store order in list
             String order = orderID + " 0 " + workload;
             orders.add(order);
+            //TODO needs testing
+            //create new entry for new order
+            for(int x = 0; x < updatedOrders.length; ++x) {
+               if(updatedOrders[x][0] == 0) {
+                   updatedOrders[x][0] = (long) orderID;
+                   updatedOrders[x][1] = time();
+                   break;
+                }
+            }
         }
         return a + "";
     }
@@ -142,25 +147,37 @@ class Auftragsknoten extends Node {
         Msg statusJ = receive("J", time() + 10);
 
         // store messages
-        if (statusE != null) {
-            processStatusMessage(statusE);
-        }
-        if (statusF != null) {
-            processStatusMessage(statusF);
-        }
-        if (statusG != null) {
-            processStatusMessage(statusG);
-        }
-        if (statusH != null) {
-            processStatusMessage(statusH);
-        }
-        if (statusI != null) {
-            processStatusMessage(statusI);
-        }
-        if (statusJ != null) {
-            processStatusMessage(statusJ);
+        if (statusE != null) { processStatusMessage(statusE); }
+        if (statusF != null) { processStatusMessage(statusF); }
+        if (statusG != null) { processStatusMessage(statusG); }
+        if (statusH != null) { processStatusMessage(statusH); }
+        if (statusI != null) { processStatusMessage(statusI); }
+        if (statusJ != null) { processStatusMessage(statusJ); }
+
+        checkTimeout();
+    }
+
+    //TODO needs testing
+    //checks for order timeouts, in case of no-message-error
+    private void checkTimeout() {
+        for(int i = 0; i < updatedOrders.length; ++i) {
+            if(updatedOrders[i][1] > time() + 100) {
+                //resend order
+                //TODO needs testing
+                for(String s : orders) {
+                    if (number(s, 1) == updatedOrders[i][0]) {
+                        try {
+                            form('a', s).send(distributors);
+                        } catch (SoFTException e) {
+                            e.printStackTrace();
+                        }
+                    }
+                }
+                updatedOrders[i][1] = time();
+            }
         }
     }
+
 
     private void updateOrders(Msg msg) {
         String s = msg.getCo();
@@ -181,6 +198,26 @@ class Auftragsknoten extends Node {
         orders.remove(toDelete);
         if (toAdd != null) {
             orders.add(toAdd);
+
+            //TODO needs testing
+            //update time if order isn't completed yet
+            for(int i = 0; i < updatedOrders.length; ++i) {
+                if(updatedOrders[i][0] == ID) {
+                    updatedOrders[i][1] = time();
+                    break;
+                }
+            }
+
+        } else {
+
+            //TODO needs testing
+            //delete entry if order is completed
+            for(int i = 0; i < updatedOrders.length; ++i) {
+                if(updatedOrders[i][0] == ID) {
+                    updatedOrders[i][0] = updatedOrders[i][1] = 0;
+                    break;
+                }
+            }
         }
     }
 
@@ -198,8 +235,6 @@ class Auftragsknoten extends Node {
         }
     }
 
-
-    // TODO
     private boolean checkForFaults(String message) {
         int ID = number(message, 1);
         int steps = number(message, 2);
@@ -214,10 +249,7 @@ class Auftragsknoten extends Node {
                 }
             }
         }
-        if (flag) {
-            return true;
-        }
-        return false;
+        return flag;
     }
 
     private void sendLastMessage(int ID) {
@@ -230,19 +262,6 @@ class Auftragsknoten extends Node {
                 }
                 break;
             }
-        }
-    }
-
-    /**
-     * Creates and sends a reconfiguration message to the distributors.
-     *
-     * @param computer the faulty computer
-     */
-    private void sendReconfigurationMessage(char computer) {
-        try {
-            form('r', computer).send(distributors);
-        } catch (SoFTException e) {
-            e.printStackTrace();
         }
     }
 }
@@ -258,7 +277,7 @@ class Verteiler extends Node {
     // stores the orders
     private ArrayList<String> orderList = new ArrayList<>();
 
-    public Verteiler(abstrakterRechner[] rechner) {
+    Verteiler(abstrakterRechner[] rechner) {
         this.rechner = rechner;
     }
 
@@ -424,20 +443,20 @@ abstract class abstrakterRechner extends Node {
     private int geschwindigkeit;
     private boolean status;
 
-    public abstrakterRechner(int geschwindigkeit, boolean status) {
+    abstrakterRechner(int geschwindigkeit, boolean status) {
         this.geschwindigkeit = geschwindigkeit;
         this.status = status;
     }
 
-    public int getGeschwindigkeit() {
+    int getGeschwindigkeit() {
         return geschwindigkeit;
     }
 
-    public void setStatus(boolean status) {
+    void setStatus(boolean status) {
         this.status = status;
     }
 
-    public boolean getStatus() {
+    boolean getStatus() {
         return status;
     }
 }
@@ -452,9 +471,9 @@ class Rechner extends abstrakterRechner {
     private ArrayList<String> ordersD = new ArrayList<>();
     private ArrayList<String> orderList = new ArrayList<>();
     private ArrayList<String> removeList = new ArrayList<>();
-    private String remove = new String();
+    private String remove;
 
-    public Rechner(int geschwindigkeit, boolean status) {
+    Rechner(int geschwindigkeit, boolean status) {
         super(geschwindigkeit, status);
     }
 

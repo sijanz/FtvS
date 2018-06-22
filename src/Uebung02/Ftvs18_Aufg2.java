@@ -392,6 +392,10 @@ class FtVerwalter extends Node
     private ArrayList<String> inD = new ArrayList();
     private ArrayList<String> outD = new ArrayList();
 
+    private boolean faultyA = false;
+    private boolean faultyB = false;
+    private boolean faultyC = false;
+    private boolean faultyD = false;
 
     public String runNode(String input) throws SoFTException {
         initialisierung();
@@ -407,10 +411,9 @@ class FtVerwalter extends Node
             if (m != null) {
                 switch (m.getTy()) {
                     case 'f':
-                        long time /* no C */ = time();
-
                         // @debug
-                        System.err.println("error received at " + time);
+                        System.err.println("error received at " + time());
+                        RLcalcStart(m.getSe(), time());
                         break;
                     case 'r':
                         receiveR(m);
@@ -496,6 +499,112 @@ class FtVerwalter extends Node
                 + anzZurueck + " mal zur�ckgesetzt, "
                 + anzWeite + " mal mit zunehmender R�cksetzweite, "
                 + anzAnfang + " mal auf den Anfang.";
+    }
+
+    private void RLcalcStart(char id, long time) {
+        faultyA = faultyB = faultyC = faultyD = false;
+        RLcalc(id, time);
+    }
+
+    // TODO: test
+    private void RLcalc(char id, long time) {
+        long RPtime = 0;
+        switch (id) {
+            case 'A':
+                System.out.println("recursive A called");
+                faultyA = true;
+                RPtime = 0;
+                for (String s : RpListA) {
+                    long sTime = number(s, 3);
+                    if (sTime > RPtime && sTime < time) {
+                        RPtime = sTime;
+                    }
+                }
+                for (String s : inA) {
+                    long sTime = number(s, 1);
+                    if (sTime > RPtime && sTime < time) {
+                        RLcalc(word(s, 2).charAt(0), number(s, 1));
+                    }
+                }
+                for (String s : outA) {
+                    long sTime = number(s, 1);
+                    if (sTime > RPtime && sTime < time) {
+                        RLcalc(word(s, 2).charAt(0), number(s, 1));
+                    }
+                }
+                break;
+            case 'B':
+                System.out.println("recursive B called");
+                faultyB = true;
+                RPtime = 0;
+                for (String s : RpListB) {
+                    long sTime = number(s, 3);
+                    if (sTime > RPtime && RPtime < time) {
+                        RPtime = sTime;
+                    }
+                }
+                for (String s : inB) {
+                    long sTime = number(s, 1);
+                    if (sTime > RPtime && sTime < time) {
+                        RLcalc(word(s, 2).charAt(0), number(s, 1));
+                    }
+                }
+                for (String s : outB) {
+                    long sTime = number(s, 1);
+                    if (sTime > RPtime && sTime < time) {
+                        RLcalc(word(s, 2).charAt(0), number(s, 1));
+                    }
+                }
+                break;
+            case 'C':
+                System.out.println("recursive C called");
+                faultyC = true;
+                RPtime = 0;
+                for (String s : RpListC) {
+                    long sTime = number(s, 3);
+                    if (sTime > RPtime && RPtime < time) {
+                        RPtime = sTime;
+                    }
+                }
+                for (String s : inC) {
+                    long sTime = number(s, 1);
+                    if (sTime > RPtime && sTime < time) {
+                        RLcalc(word(s, 2).charAt(0), number(s, 1));
+                    }
+                }
+                for (String s : outC) {
+                    long sTime = number(s, 1);
+                    if (sTime > RPtime && sTime < time) {
+                        RLcalc(word(s, 2).charAt(0), number(s, 1));
+                    }
+                }
+                break;
+            case 'D':
+                System.out.println("recursive D called");
+                faultyD = true;
+                RPtime = 0;
+                for (String s : RpListD) {
+                    long sTime = number(s, 3);
+                    if (sTime > RPtime && RPtime < time) {
+                        RPtime = sTime;
+                    }
+                }
+                for (String s : inD) {
+                    long sTime = number(s, 1);
+                    if (sTime > RPtime && sTime < time) {
+                        RLcalc(word(s, 2).charAt(0), number(s, 1));
+                    }
+                }
+                for (String s : outD) {
+                    long sTime = number(s, 1);
+                    if (sTime > RPtime && sTime < time) {
+                        RLcalc(word(s, 2).charAt(0), number(s, 1));
+                    }
+                }
+                break;
+        }
+
+
     }
 
     private void saveMessage(Msg a) throws SoFTException {

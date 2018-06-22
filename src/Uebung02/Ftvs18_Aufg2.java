@@ -58,7 +58,12 @@ abstract class FtKnoten extends Node
         //
         // *** Diese Methode ggf. modifizieren ***
         //
+
+        // record message and send it to E
+        String content = time() + " " + empfaenger;
+        form('a', content).send("E");
     }
+
 
     protected String empfange(char sender)
             throws Anlauf, SoFTException
@@ -74,6 +79,7 @@ abstract class FtKnoten extends Node
         //
     }
 
+
     protected void initiiereRL(String inhalt, boolean anlaufend)
             throws Anlauf, SoFTException
     // Operator, den die Anwendung aufruft, um eine R�cksetzlinie zu initiieren.
@@ -82,7 +88,13 @@ abstract class FtKnoten extends Node
     { //
         // *** Diese Methode ggf. modifizieren ***
         //
+        String content = inhalt + " " + time();
+        form('r', content).send("E");
+
+        // @debug
+        say("RP created");
     }
+
 
     protected void lokaleArbeit()
             throws Anlauf, SoFTException
@@ -93,6 +105,7 @@ abstract class FtKnoten extends Node
         // *** Diese Methode ggf. modifizieren ***
         //
     }
+
 
     protected void fehlermeldung()
             throws Anlauf, SoFTException
@@ -357,12 +370,53 @@ class FtVerwalter extends Node
     //
     // *** Ggf. weitere Variablen des RL-Verwalters ***
     //
+    ArrayList listA = new ArrayList();
+    ArrayList listB = new ArrayList();
+    ArrayList listC = new ArrayList();
+    ArrayList listD = new ArrayList();
 
     public String runNode(String input) throws SoFTException {
         initialisierung();
         //
         // *** Aktionen des RL-Verwalters ***
         //
+
+        boolean stop = false;
+
+        while (!stop) {
+            Msg t = receive("ABCD", 't', time() + 5);
+            Msg r = receive("ACBD", 'r', time() + 5);
+            Msg a = receive("ABCD", 'a', time() + 5);
+
+            if (r != null) {
+
+                int step = number(r.getCo(), 1);
+                int state = number(r.getCo(), 2);
+                long time /* no C */ = number(r.getCo(), 3);
+
+                // @debug
+                say("r message received - step: " + step + " state: " + state + " time: " + time);
+            }
+
+            if (a != null) {
+                char sender = a.getSe();
+                String receiver = word(a.getCo(), 2);
+                long time = number(a.getCo(), 1);
+
+                // @debug
+                say("a message received - sender: " + sender + " receiver: " + receiver + " time: " + time);
+            }
+
+            if (t != null) {
+
+                // @debug
+                System.out.println("now terminating");
+
+                stop = true;
+            }
+
+        }
+
         return anzInitRL + " RL initiiert, " + anzLoeschRL + " RL gel�scht, "
                 + anzZurueck + " mal zur�ckgesetzt, "
                 + anzWeite + " mal mit zunehmender R�cksetzweite, "

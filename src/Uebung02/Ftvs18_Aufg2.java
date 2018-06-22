@@ -69,6 +69,11 @@ abstract class FtKnoten extends Node
             throws Anlauf, SoFTException
     // Operator, den die Anwendung aufruft, um eine Nachricht zu empfangen.
     {
+        Msg r = receive("E", never());
+        if (r != null) {
+            sendRP();
+        }
+
         Msg naEmpf = receive(sender, never());  // Empfang ohne Zeitschranke.
         if (naEmpf != null && naEmpf.getTy() == 'n')
             return naEmpf.getCo();               // Nutznachricht wurde empfangen.
@@ -77,6 +82,11 @@ abstract class FtKnoten extends Node
         //
         // *** Diese Methode ggf. modifizieren ***
         //
+    }
+
+    private void sendRP() throws SoFTException {
+        String content = this.schritt() + " " + this.zustand() + " " + time();
+        form('r', content).send("E");
     }
 
 
@@ -88,11 +98,7 @@ abstract class FtKnoten extends Node
     { //
         // *** Diese Methode ggf. modifizieren ***
         //
-        String content = inhalt + " " + time();
-        form('r', content).send("E");
 
-        // @debug
-        say("RP created");
     }
 
 
@@ -359,6 +365,7 @@ class Injektor
 
 
 //------------------------------------------------------------------------------
+@SuppressWarnings("Duplicates")
 class FtVerwalter extends Node
 // Zentralisierter Verwalter aller R�cksetzlinien.
 { // F�r die Statistik:
@@ -370,10 +377,21 @@ class FtVerwalter extends Node
     //
     // *** Ggf. weitere Variablen des RL-Verwalters ***
     //
-    ArrayList listA = new ArrayList();
-    ArrayList listB = new ArrayList();
-    ArrayList listC = new ArrayList();
-    ArrayList listD = new ArrayList();
+    private ArrayList<String> RpListA = new ArrayList();
+    private ArrayList<String> RpListB = new ArrayList();
+    private ArrayList<String> RpListC = new ArrayList();
+    private ArrayList<String> RpListD = new ArrayList();
+
+    //formatting: in-lists: (time, sender) out-lists: (time, receiver)
+    private ArrayList<String> inA = new ArrayList();
+    private ArrayList<String> outA = new ArrayList();
+    private ArrayList<String> inB = new ArrayList();
+    private ArrayList<String> outB = new ArrayList();
+    private ArrayList<String> inC = new ArrayList();
+    private ArrayList<String> outC = new ArrayList();
+    private ArrayList<String> inD = new ArrayList();
+    private ArrayList<String> outD = new ArrayList();
+
 
     public String runNode(String input) throws SoFTException {
         initialisierung();
@@ -385,23 +403,55 @@ class FtVerwalter extends Node
 
         while (!stop) {
             Msg t = receive("ABCD", 't', time() + 5);
-            Msg r = receive("ACBD", 'r', time() + 5);
+            Msg r = receive("ABCD", 'r', time() + 5);
             Msg a = receive("ABCD", 'a', time() + 5);
 
             if (r != null) {
-
-                int step = number(r.getCo(), 1);
-                int state = number(r.getCo(), 2);
-                long time /* no C */ = number(r.getCo(), 3);
-
-                // @debug
-                say("r message received - step: " + step + " state: " + state + " time: " + time);
+                receiveR(r);
             }
 
             if (a != null) {
+
                 char sender = a.getSe();
-                String receiver = word(a.getCo(), 2);
+                char receiver = word(a.getCo(), 2).charAt(0);
                 long time = number(a.getCo(), 1);
+
+                form('r', "").send(String.valueOf(receiver) + sender);
+
+                String inContent = time + " " + sender;
+                String outContent = time + " " + receiver;
+
+                //add to in-list
+                switch (receiver) {
+                    case 'A':
+                        inA.add(inContent);
+                        break;
+                    case 'B':
+                        inB.add(inContent);
+                        break;
+                    case 'C':
+                        inC.add(inContent);
+                        break;
+                    case 'D':
+                        inD.add(inContent);
+                        break;
+                }
+
+                //add to out-list
+                switch (sender) {
+                    case 'A':
+                        outA.add(outContent);
+                        break;
+                    case 'B':
+                        outB.add(outContent);
+                        break;
+                    case 'C':
+                        outC.add(outContent);
+                        break;
+                    case 'D':
+                        outD.add(outContent);
+                        break;
+                }
 
                 // @debug
                 say("a message received - sender: " + sender + " receiver: " + receiver + " time: " + time);
@@ -416,6 +466,73 @@ class FtVerwalter extends Node
             }
 
         }
+
+        // @debug
+        System.out.println();
+        System.out.println("--- RP list A ---");
+        for (String s : RpListA) {
+            System.out.println(s);
+        }
+        System.out.println();
+
+        System.out.println("--- RP list B ---");
+        for (String s : RpListB) {
+            System.out.println(s);
+        }
+        System.out.println();
+
+        System.out.println("--- RP list C ---");
+        for (String s : RpListC) {
+            System.out.println(s);
+        }
+        System.out.println();
+
+        System.out.println("--- RP list D ---");
+        for (String s : RpListD) {
+            System.out.println(s);
+        }
+        System.out.println("\n--- NA ---\n");
+
+        System.out.println("--- inA ---");
+        for (String s : inA) {
+            System.out.println(s);
+        }
+        System.out.println();
+        System.out.println("--- outA ---");
+        for (String s : outA) {
+            System.out.println(s);
+        }
+        System.out.println();
+        System.out.println("--- inB ---");
+        for (String s : inB) {
+            System.out.println(s);
+        }
+        System.out.println();
+        System.out.println("--- outB ---");
+        for (String s : outB) {
+            System.out.println(s);
+        }
+        System.out.println();
+        System.out.println("--- inC ---");
+        for (String s : inC) {
+            System.out.println(s);
+        }
+        System.out.println();
+        System.out.println("--- outC ---");
+        for (String s : outC) {
+            System.out.println(s);
+        }
+        System.out.println();
+        System.out.println("--- inD ---");
+        for (String s : inD) {
+            System.out.println(s);
+        }
+        System.out.println();
+        System.out.println("--- outD ---");
+        for (String s : outD) {
+            System.out.println(s);
+        }
+        System.out.println();
 
         return anzInitRL + " RL initiiert, " + anzLoeschRL + " RL gel�scht, "
                 + anzZurueck + " mal zur�ckgesetzt, "
@@ -434,6 +551,28 @@ class FtVerwalter extends Node
         //
         // *** Ggf. weitere Initialisierungen ***
         //
+    }
+
+    private void receiveR(Msg r) {
+
+        // formatting: step state time
+
+        switch (r.getSe()) {
+            case 'A':
+                RpListA.add(r.getCo());
+                break;
+            case 'B':
+                RpListB.add(r.getCo());
+                break;
+            case 'C':
+                RpListC.add(r.getCo());
+                break;
+            case 'D':
+                RpListD.add(r.getCo());
+                break;
+            default:
+                System.out.println("invalid sender");
+        }
     }
 
     //

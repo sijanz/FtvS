@@ -402,69 +402,27 @@ class FtVerwalter extends Node
         boolean stop = false;
 
         while (!stop) {
-            Msg t = receive("ABCD", 't', time() + 5);
-            Msg r = receive("ABCD", 'r', time() + 5);
-            Msg a = receive("ABCD", 'a', time() + 5);
+            Msg m = receive("ABCD", time() + 5);
 
-            if (r != null) {
-                receiveR(r);
-            }
+            if (m != null) {
+                switch (m.getTy()) {
+                    case 'f':
+                        long time /* no C */ = time();
 
-            if (a != null) {
-
-                char sender = a.getSe();
-                char receiver = word(a.getCo(), 2).charAt(0);
-                long time = number(a.getCo(), 1);
-
-                form('r', "").send(String.valueOf(receiver) + sender);
-
-                String inContent = time + " " + sender;
-                String outContent = time + " " + receiver;
-
-                //add to in-list
-                switch (receiver) {
-                    case 'A':
-                        inA.add(inContent);
+                        // @debug
+                        System.err.println("error received at " + time);
                         break;
-                    case 'B':
-                        inB.add(inContent);
+                    case 'r':
+                        receiveR(m);
                         break;
-                    case 'C':
-                        inC.add(inContent);
+                    case 'a':
+                        saveMessage(m);
                         break;
-                    case 'D':
-                        inD.add(inContent);
+                    case 't':
+                        stop = true;
                         break;
                 }
-
-                //add to out-list
-                switch (sender) {
-                    case 'A':
-                        outA.add(outContent);
-                        break;
-                    case 'B':
-                        outB.add(outContent);
-                        break;
-                    case 'C':
-                        outC.add(outContent);
-                        break;
-                    case 'D':
-                        outD.add(outContent);
-                        break;
-                }
-
-                // @debug
-                say("a message received - sender: " + sender + " receiver: " + receiver + " time: " + time);
             }
-
-            if (t != null) {
-
-                // @debug
-                System.out.println("now terminating");
-
-                stop = true;
-            }
-
         }
 
         // @debug
@@ -538,6 +496,52 @@ class FtVerwalter extends Node
                 + anzZurueck + " mal zur�ckgesetzt, "
                 + anzWeite + " mal mit zunehmender R�cksetzweite, "
                 + anzAnfang + " mal auf den Anfang.";
+    }
+
+    private void saveMessage(Msg a) throws SoFTException {
+        char sender = a.getSe();
+        char receiver = word(a.getCo(), 2).charAt(0);
+        long time = number(a.getCo(), 1);
+
+        form('r', "").send(String.valueOf(receiver) + sender);
+
+        String inContent = time + " " + sender;
+        String outContent = time + " " + receiver;
+
+        //add to in-list
+        switch (receiver) {
+            case 'A':
+                inA.add(inContent);
+                break;
+            case 'B':
+                inB.add(inContent);
+                break;
+            case 'C':
+                inC.add(inContent);
+                break;
+            case 'D':
+                inD.add(inContent);
+                break;
+        }
+
+        //add to out-list
+        switch (sender) {
+            case 'A':
+                outA.add(outContent);
+                break;
+            case 'B':
+                outB.add(outContent);
+                break;
+            case 'C':
+                outC.add(outContent);
+                break;
+            case 'D':
+                outD.add(outContent);
+                break;
+        }
+
+        // @debug
+        say("a message received - sender: " + sender + " receiver: " + receiver + " time: " + time);
     }
 
     void initialisierung()

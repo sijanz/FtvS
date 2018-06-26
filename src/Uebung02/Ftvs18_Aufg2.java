@@ -65,13 +65,24 @@ abstract class FtKnoten extends Node
     }
 
 
+    // FIXME
     protected String empfange(char sender)
             throws Anlauf, SoFTException
     // Operator, den die Anwendung aufruft, um eine Nachricht zu empfangen.
     {
         Msg r = receive("E", never());
-        if (r != null) {
-            sendRP();
+        if (r != null && r.getTy() == 'r') {
+            sendRp();
+        } else if (r != null && r.getTy() == 'z') {
+            boolean flag = true;
+            while (flag) {
+                Msg m = receive("E", time() + 5);
+                if (m != null && m.getTy() == 'z') {
+                    flag = false;
+                    restart(m);
+
+                }
+            }
         }
 
         Msg naEmpf = receive(sender, never());  // Empfang ohne Zeitschranke.
@@ -79,12 +90,24 @@ abstract class FtKnoten extends Node
             return naEmpf.getCo();               // Nutznachricht wurde empfangen.
         else
             return "";
-        //
-        // *** Diese Methode ggf. modifizieren ***
-        //
     }
 
-    private void sendRP() throws SoFTException {
+
+    // TODO: needs testing
+    private void restart(Msg m) {
+        int step = number(m.getCo(), 1);
+        int state = number(m.getCo(), 2);
+        // WARUM AUF DEUTSCH???
+        //OBWOHL WIR DEN KRIEG VERLOREN HABEN???
+        this.setzeSchritt(step);
+        this.setzeZustand(state);
+    }
+
+
+    /**
+     * Sends the current state and step variables to node E.
+     */
+    private void sendRp() throws SoFTException {
         String content = this.schritt() + " " + this.zustand() + " " + time();
         form('r', content).send("E");
     }
@@ -118,6 +141,7 @@ abstract class FtKnoten extends Node
     // Sende eine Fehlermeldung bei erkanntem Fehler an den RL-Verwalter.
     {
         form('f', schritt() + " ::::: Fehlermeldung :::::").send('E');
+        say("Fehler");
     }
 
     //
@@ -287,6 +311,7 @@ class Anwendung extends FtKnoten
 
 //------------------------------------------------------------------------------
 class Anlauf extends Exception {
+
 }
 // Wenn ein Knoten vom RL-Verwalter zur�ckgesetzt wird, h�lt er diesen
 // zun�chst an, so dass die von der Anwendung aufgerufene Methode keinen
@@ -377,25 +402,30 @@ class FtVerwalter extends Node
     //
     // *** Ggf. weitere Variablen des RL-Verwalters ***
     //
-    private ArrayList<String> RpListA = new ArrayList();
-    private ArrayList<String> RpListB = new ArrayList();
-    private ArrayList<String> RpListC = new ArrayList();
-    private ArrayList<String> RpListD = new ArrayList();
+    private ArrayList<String> RpListA = new ArrayList<>();
+    private ArrayList<String> RpListB = new ArrayList<>();
+    private ArrayList<String> RpListC = new ArrayList<>();
+    private ArrayList<String> RpListD = new ArrayList<>();
 
-    //formatting: in-lists: (time, sender) out-lists: (time, receiver)
-    private ArrayList<String> inA = new ArrayList();
-    private ArrayList<String> outA = new ArrayList();
-    private ArrayList<String> inB = new ArrayList();
-    private ArrayList<String> outB = new ArrayList();
-    private ArrayList<String> inC = new ArrayList();
-    private ArrayList<String> outC = new ArrayList();
-    private ArrayList<String> inD = new ArrayList();
-    private ArrayList<String> outD = new ArrayList();
+    // formatting: in-lists: (time, sender) out-lists: (time, receiver)
+    private ArrayList<String> inA = new ArrayList<>();
+    private ArrayList<String> outA = new ArrayList<>();
+    private ArrayList<String> inB = new ArrayList<>();
+    private ArrayList<String> outB = new ArrayList<>();
+    private ArrayList<String> inC = new ArrayList<>();
+    private ArrayList<String> outC = new ArrayList<>();
+    private ArrayList<String> inD = new ArrayList<>();
+    private ArrayList<String> outD = new ArrayList<>();
 
     private boolean faultyA = false;
     private boolean faultyB = false;
     private boolean faultyC = false;
     private boolean faultyD = false;
+    private long faultFlagA = 9999;
+    private long faultFlagB = 9999;
+    private long faultFlagC = 9999;
+    private long faultFlagD = 9999;
+
 
     public String runNode(String input) throws SoFTException {
         initialisierung();
@@ -411,12 +441,10 @@ class FtVerwalter extends Node
             if (m != null) {
                 switch (m.getTy()) {
                     case 'f':
-                        // @debug
-                        System.err.println("error received at " + time());
                         RLcalcStart(m.getSe(), time());
                         break;
                     case 'r':
-                        receiveR(m);
+                        processRpMessage(m);
                         break;
                     case 'a':
                         saveMessage(m);
@@ -429,6 +457,15 @@ class FtVerwalter extends Node
         }
 
         // @debug
+        // printDebugArrays();
+
+        return anzInitRL + " RL initiiert, " + anzLoeschRL + " RL gel�scht, "
+                + anzZurueck + " mal zur�ckgesetzt, "
+                + anzWeite + " mal mit zunehmender R�cksetzweite, "
+                + anzAnfang + " mal auf den Anfang.";
+    }
+
+    private void printDebugArrays() {
         System.out.println();
         System.out.println("--- RP list A ---");
         for (String s : RpListA) {
@@ -494,117 +531,184 @@ class FtVerwalter extends Node
             System.out.println(s);
         }
         System.out.println();
-
-        return anzInitRL + " RL initiiert, " + anzLoeschRL + " RL gel�scht, "
-                + anzZurueck + " mal zur�ckgesetzt, "
-                + anzWeite + " mal mit zunehmender R�cksetzweite, "
-                + anzAnfang + " mal auf den Anfang.";
     }
 
-    private void RLcalcStart(char id, long time) {
+    private void RLcalcStart(char id, long time) throws SoFTException {
+        //reset flags
         faultyA = faultyB = faultyC = faultyD = false;
+        faultFlagA = faultFlagB = faultFlagC = faultFlagD = 9999;
+
+        //set flags
         RLcalc(id, time);
+
+        //reset knodes
+        if (faultyA) {
+            form('z', faultFlagA).send("A");
+        }
+        if (faultyB) {
+            form('z', faultFlagB).send("B");
+        }
+        if (faultyC) {
+            form('z', faultFlagC).send("C");
+        }
+        if (faultyD) {
+            form('z', faultFlagD).send("D");
+        }
     }
 
     // TODO: test
-    private void RLcalc(char id, long time) {
-        long RPtime = 0;
+    private void RLcalc(char id, long errorTime) {
+        long newestRP = 0;
         switch (id) {
             case 'A':
-                System.out.println("recursive A called");
                 faultyA = true;
-                RPtime = 0;
                 for (String s : RpListA) {
-                    long sTime = number(s, 3);
-                    if (sTime > RPtime && sTime < time) {
-                        RPtime = sTime;
+                    long messageTime = number(s, 3);
+                    if (messageTime > newestRP && messageTime < errorTime) {
+                        newestRP = messageTime;
                     }
                 }
+                faultFlagA = newestRP;
+
                 for (String s : inA) {
-                    long sTime = number(s, 1);
-                    if (sTime > RPtime && sTime < time) {
+                    long messageTime = number(s, 1);
+
+                    // messageTime
+                    System.out.println("newestRP: " + newestRP + " sTime: " + messageTime + " time: " + errorTime);
+
+                    if (messageTime > newestRP && messageTime < errorTime) {
+
+                        // @debug
+                        say("recursive " + word(s, 2));
+
                         RLcalc(word(s, 2).charAt(0), number(s, 1));
                     }
+
                 }
+
                 for (String s : outA) {
-                    long sTime = number(s, 1);
-                    if (sTime > RPtime && sTime < time) {
+                    long messageTime = number(s, 1);
+
+                    // @debug
+                    System.out.println("newestRP: " + newestRP + " sTime: " + messageTime + " time: " + errorTime);
+
+                    if (newestRP < messageTime && messageTime < errorTime) {
+
+                        // @debug
+                        say("recursive " + word(s, 2));
+
                         RLcalc(word(s, 2).charAt(0), number(s, 1));
                     }
                 }
                 break;
             case 'B':
-                System.out.println("recursive B called");
                 faultyB = true;
-                RPtime = 0;
                 for (String s : RpListB) {
-                    long sTime = number(s, 3);
-                    if (sTime > RPtime && RPtime < time) {
-                        RPtime = sTime;
+                    long messageTime = number(s, 3);
+                    if (messageTime > newestRP && messageTime < errorTime) {
+                        newestRP = messageTime;
                     }
                 }
+                faultFlagB = newestRP;
+
                 for (String s : inB) {
-                    long sTime = number(s, 1);
-                    if (sTime > RPtime && sTime < time) {
+                    long messageTime = number(s, 1);
+
+                    // @debug
+                    System.out.println("newestRP: " + newestRP + " sTime: " + messageTime + " time: " + errorTime);
+
+                    if (messageTime > newestRP && messageTime < errorTime) {
+
+                        // @debug
+                        say("recursive " + word(s, 2));
+
                         RLcalc(word(s, 2).charAt(0), number(s, 1));
                     }
+
                 }
+
                 for (String s : outB) {
-                    long sTime = number(s, 1);
-                    if (sTime > RPtime && sTime < time) {
+                    long messageTime = number(s, 1);
+
+                    // @debug
+                    System.out.println("newestRP: " + newestRP + " sTime: " + messageTime + " time: " + errorTime);
+
+                    if (messageTime > newestRP && messageTime < errorTime) {
+
+                        // @debug
+                        say("recursive " + word(s, 2));
+
                         RLcalc(word(s, 2).charAt(0), number(s, 1));
                     }
                 }
                 break;
             case 'C':
-                System.out.println("recursive C called");
                 faultyC = true;
-                RPtime = 0;
                 for (String s : RpListC) {
-                    long sTime = number(s, 3);
-                    if (sTime > RPtime && RPtime < time) {
-                        RPtime = sTime;
+                    long messageTime = number(s, 3);
+                    if (messageTime > newestRP && messageTime < errorTime) {
+                        newestRP = messageTime;
                     }
                 }
+                faultFlagC = newestRP;
+
                 for (String s : inC) {
-                    long sTime = number(s, 1);
-                    if (sTime > RPtime && sTime < time) {
+                    long messageTime = number(s, 1);
+                    if (messageTime > newestRP && messageTime < errorTime) {
+
+                        // @debug
+                        say("recursive " + word(s, 2));
+
                         RLcalc(word(s, 2).charAt(0), number(s, 1));
                     }
+
                 }
+
                 for (String s : outC) {
-                    long sTime = number(s, 1);
-                    if (sTime > RPtime && sTime < time) {
+                    long messageTime = number(s, 1);
+                    if (messageTime > newestRP && messageTime < errorTime) {
+
+                        // @debug
+                        say("recursive " + word(s, 2));
+
                         RLcalc(word(s, 2).charAt(0), number(s, 1));
                     }
                 }
                 break;
             case 'D':
-                System.out.println("recursive D called");
                 faultyD = true;
-                RPtime = 0;
                 for (String s : RpListD) {
-                    long sTime = number(s, 3);
-                    if (sTime > RPtime && RPtime < time) {
-                        RPtime = sTime;
+                    long messageTime = number(s, 3);
+                    if (messageTime > newestRP && messageTime < errorTime) {
+                        newestRP = messageTime;
                     }
                 }
+                faultFlagD = newestRP;
+
                 for (String s : inD) {
-                    long sTime = number(s, 1);
-                    if (sTime > RPtime && sTime < time) {
+                    long messageTime = number(s, 1);
+                    if (messageTime > newestRP && messageTime < errorTime) {
+
+                        // @debug
+                        say("recursive " + word(s, 2));
+
                         RLcalc(word(s, 2).charAt(0), number(s, 1));
                     }
+
                 }
+
                 for (String s : outD) {
-                    long sTime = number(s, 1);
-                    if (sTime > RPtime && sTime < time) {
+                    long messageTime = number(s, 1);
+                    if (messageTime > newestRP && messageTime < errorTime) {
+
+                        // @debug
+                        say("recursive " + word(s, 2));
+
                         RLcalc(word(s, 2).charAt(0), number(s, 1));
                     }
                 }
                 break;
         }
-
-
     }
 
     private void saveMessage(Msg a) throws SoFTException {
@@ -648,9 +752,6 @@ class FtVerwalter extends Node
                 outD.add(outContent);
                 break;
         }
-
-        // @debug
-        say("a message received - sender: " + sender + " receiver: " + receiver + " time: " + time);
     }
 
     void initialisierung()
@@ -666,7 +767,8 @@ class FtVerwalter extends Node
         //
     }
 
-    private void receiveR(Msg r) {
+
+    private void processRpMessage(Msg r) {
 
         // formatting: step state time
 
@@ -683,8 +785,6 @@ class FtVerwalter extends Node
             case 'D':
                 RpListD.add(r.getCo());
                 break;
-            default:
-                System.out.println("invalid sender");
         }
     }
 

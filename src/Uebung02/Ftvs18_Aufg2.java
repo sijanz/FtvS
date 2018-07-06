@@ -1,8 +1,9 @@
+// Übungen zur Vorlesung "Fehlertolerante verteilte Systeme" im SS 2018.
+// Aufgabe 2: Ausbreitung von Rücksetzlinien.
 package Uebung02;
-// �bungen zur Vorlesung "Fehlertolerante verteilte Systeme" im SS 2018.
-// Aufgabe 2: Ausbreitung von R�cksetzlinien.
 
 import SoFTlib.*;
+import Uebung00.SoftEinfuehrung;
 
 import static SoFTlib.Helper.*;
 
@@ -11,17 +12,19 @@ import java.util.*;
 
 //------------------------------------------------------------------------------
 abstract class FtKnoten extends Node
-// Knoten, der eine Anwendung ausf�hrt.
-{ // F�r die Statistik:
+// Knoten, der eine Anwendung ausführt.
+{ // Für die Statistik:
     int anzInitRL;   // Anzahl der initiierten RL.
     //
     // *** Ggf. weitere Variablen des Knotens ***
     //
+    static int globalRPscore = 1;
+    int RPscore; // RP number
 
     public String runNode(String input) throws SoFTException {
         anzInitRL = 0;            // Noch keine RL initiiert.
         initialisierung(input);   // Anwendung startet.
-        lauf();                   // Anwendung l�uft.
+        lauf();                   // Anwendung läuft.
         return terminierung();    // Knoten beendet seine Arbeit.
         //
         // *** Diese Methode ggf. modifizieren ***
@@ -35,7 +38,7 @@ abstract class FtKnoten extends Node
     abstract void initialisierung(String input) // Initialisiere die Anwendung.
             throws SoFTException;
 
-    abstract void lauf() throws SoFTException;  // Anwendung wird ausgef�hrt.
+    abstract void lauf() throws SoFTException;  // Anwendung wird ausgeführt.
 
     abstract int schritt();                     // Lies Variable schritt.
 
@@ -49,106 +52,118 @@ abstract class FtKnoten extends Node
 
     protected void sende(String inhalt, char empfaenger)
             throws Anlauf, SoFTException
-    // Operator, den die Anwendung aufruft, um zun�chst lokale Arbeit zu ver-
+    // Operator, den die Anwendung aufruft, um zunächst lokale Arbeit zu ver-
     // richten und dann eine Nachricht zu senden. Typ 'n' bedeutet: Nutznachricht
     // der Anwendung.
     {
         lokaleArbeit();
-        form('n', inhalt).send(empfaenger);
+        form('n', inhalt + " " + RPscore).send(empfaenger);
+
         //
         // *** Diese Methode ggf. modifizieren ***
         //
 
-        // record message and send it to E
-        String content = time() + " " + empfaenger;
-        form('a', content).send("E");
     }
 
-
-    // FIXME
-    protected String empfange(char sender)
-            throws Anlauf, SoFTException
     // Operator, den die Anwendung aufruft, um eine Nachricht zu empfangen.
-    {
-        Msg msgE = receive("ABCDE", never());
+    protected String empfange(char sender) throws Anlauf, SoFTException {
 
-        if (msgE != null) {
+        boolean flag = true;
 
-            // create RP
-            if (msgE.getTy() == 'r') {
+        while (flag) {
 
-                // @debug
-                say("sending RP");
+            Msg msgE = receive("E", time() + 1);
+            while (msgE != null) {
 
-                sendRp();
-
-                // pause running
-            } else if (msgE.getTy() == 'n') {
-                return msgE.getCo();               // Nutznachricht wurde empfangen.
-            } else if (msgE.getTy() == 'p') {
-                boolean flag = true;
-
-                // @debug
-                say("pausing");
-
-                form('c', time()).send("E");
-
-               /* while (flag) {
-                    Msg m = receive("E", time() + 10000);
-                    if (m != null && m.getTy() == 'z') {
-                        flag = false;
+                switch (msgE.getTy()) {
+                    case 'f':
 
                         // @debug
-                        say("end pausing");
-                    }
-                }*/
-                // @debug
-                say("resetting");
+                        say("It's freezing outside");
 
-                // resetting
-                // restart(msgE);
+                        // inform E thread is frozen
+                        form('c', time()).send('E');
 
+                        // wait for all threads to freeze and info on reset
+                        msgE = receive("E", never());
+
+                        // empty messages from old run
+                        msgE = receive("ABCD", time() + 1);
+                        while (msgE != null) {
+                            msgE = receive("ABCD", time() + 1);
+                        }
+
+                        //TODO
+                        // reset
+
+
+                        // @debug
+                        say("unfrozen");
+                }
+
+                msgE = receive("E", time() + 1);
+            }
+
+            Msg msg = receive(sender, never());  // Empfang ohne Zeitschranke.
+            if (msg != null) {
+
+                int score = number(msg.getCo(), 3);
+
+                switch (msg.getTy()) {
+                    case 'n':
+                        //sender has a new RP-status
+                        if (score > RPscore) {
+                            RPscore = score;
+                            initiateRP(schritt() + " " + zustand());
+                            //this node has a never RP-status
+                        } else if (score < RPscore) {
+
+                            //send a "copy" to E
+                            form('a', msg.getSe() + " " + time() + " " + msg.getCo() + " " + RPscore).send("E");
+
+                            form('u', RPscore).send(msg.getSe());
+                        }
+                        return msg.getCo();               // Nutznachricht wurde empfangen.
+                    case 'u':
+                        if (score > RPscore) {
+                            RPscore = score;
+                            initiateRP(schritt() + " " + zustand());
+
+                            //this node has a never RP-status
+                        }
+                        break;
+                }
+            } else {
+                flag = false;
             }
         }
         return "";
+        //
+        // *** Diese Methode ggf. modifizieren ***
+        //
     }
-
-
-    // TODO: needs testing
-    private void restart(Msg m) {
-        int step = number(m.getCo(), 1);
-        int state = number(m.getCo(), 2);
-        // WARUM AUF DEUTSCH???
-        //OBWOHL WIR DEN KRIEG VERLOREN HABEN???
-        this.setzeSchritt(step);
-        this.setzeZustand(state);
-    }
-
-
-    /**
-     * Sends the current state and step variables to node E.
-     */
-    private void sendRp() throws SoFTException {
-        String content = this.schritt() + " " + this.zustand() + " " + time();
-        form('r', content).send("E");
-    }
-
 
     protected void initiiereRL(String inhalt, boolean anlaufend)
             throws Anlauf, SoFTException
-    // Operator, den die Anwendung aufruft, um eine R�cksetzlinie zu initiieren.
-    // Im Moment des Zur�cksetzens wird die RL, auf die zur�ckgesetzt
+    // Operator, den die Anwendung aufruft, um eine Rücksetzlinie zu initiieren.
+    // Im Moment des Zurücksetzens wird die RL, auf die zurückgesetzt
     // wurde (angezeigt durch anlaufend == true), nicht sofort wieder erstellt.
     { //
         // *** Diese Methode ggf. modifizieren ***
         //
-
+        if (!anlaufend) {
+            form('r', inhalt + " " + globalRPscore).send('E');
+            RPscore = ++globalRPscore;
+        }
     }
 
+    protected void initiateRP(String content) throws SoFTException {
+        form('r', content + " " + RPscore).send('E');
+    }
 
     protected void lokaleArbeit()
             throws Anlauf, SoFTException
-    // Lokale Arbeit der Anwendung, die 12 Millisekunden Zeit ben�tigt.
+    // Lokale Arbeit der Anwendung, die 12 Millisekunden Zeit benötigt.
     {
         Msg naEmpf = receive(myChar(), time() + 12);
         //
@@ -156,12 +171,11 @@ abstract class FtKnoten extends Node
         //
     }
 
-
     protected void fehlermeldung()
             throws Anlauf, SoFTException
     // Sende eine Fehlermeldung bei erkanntem Fehler an den RL-Verwalter.
     {
-        form('f', schritt() + " " + time() + " ::::: Fehlermeldung :::::").send('E');
+        form('f', schritt() + " ::::: Fehlermeldung :::::").send('E');
     }
 
     //
@@ -186,13 +200,13 @@ abstract class FtKnoten extends Node
 class Anwendung extends FtKnoten
 // Simuliertes Anwendungsprogramm in einem Knoten.
 //
-// <<<<< Diese Klasse darf nicht ver�ndert werden >>>>>
-// 
+// <<<<< Diese Klasse darf nicht verändert werden >>>>>
+//
 {
-    int schritt,    // Z�hlt die durchgef�hrten Arbeitsschritte.
+    int schritt,    // Zählt die durchgeführten Arbeitsschritte.
             zustand;    // Zustandszahl, die einen Anwendungszustand simuliert.
-    boolean anlaufend;  // Anlaufen nach dem Zur�cksetzen.
-    double erfassung;  // Fehlererfassung des anwendungsabh�ngigen Absoluttests.
+    boolean anlaufend;  // Anlaufen nach dem Zurücksetzen.
+    double erfassung;  // Fehlererfassung des anwendungsabhängigen Absoluttests.
     Injektor injektor;   // Fehlerinjektor.
 
     // Die folgenden Methoden werden von der Oberklasse FtKnoten aufgerufen:
@@ -200,14 +214,15 @@ class Anwendung extends FtKnoten
     void initialisierung(String input) throws SoFTException
     // Initialisierung der Variablen des Anwendungsprogramms.
     {
-        schritt = 0;  // Noch kein Arbeitsschritt ausgef�hrt.
+        schritt = 0;  // Noch kein Arbeitsschritt ausgeführt.
         zustand = 10000;  // Anfangszustand.
         erfassung = real(input, getItemCount(input), 1);
         injektor = new Injektor(myChar(), input);
+        RPscore = 0;
     }
 
     void lauf() throws SoFTException
-    // Ausf�hrung des (simulierten) Anwendungsprogramms.
+    // Ausführung des (simulierten) Anwendungsprogramms.
     {
         while (schritt < Ftvs18_Aufg2.korrektEndSchritt) {
             String seInhalt = schritt + " " + zustand,
@@ -225,10 +240,10 @@ class Anwendung extends FtKnoten
                 }
                 anlaufend = false;
                 fortschritt(emZustand);              // Neuer Zustand der Anwendung.
-                if (absoluttest()) fehlermeldung();  // Pr�fe den neuen Zustand.
+                if (absoluttest()) fehlermeldung();  // Prüfe den neuen Zustand.
             } catch (Anlauf abbruch)    // Nach dem Abbruch wurde die Anwendung zurueck-
             {
-                anlaufend = true;  // gesetzt und l�uft nun wieder an.
+                anlaufend = true;  // gesetzt und läuft nun wieder an.
             }
         }
     }
@@ -255,7 +270,7 @@ class Anwendung extends FtKnoten
     // Der Fortschritt des Anwendungsprogramms wird zu Beginn jedes Arbeits-
     // schritts dadurch simuliert, dass ein neuer Zustandswert aus dem bis-
     // herigen Zustandswert und dem Inhalt emZustand einer im vorangehenden
-    // Arbeitsschritt empfangenen Nachricht pseudozuf�llig berechnet wird.
+    // Arbeitsschritt empfangenen Nachricht pseudozufällig berechnet wird.
     // Der Fortschritt unterliegt der Fehlerinjektion.
     {
         int i = myIndex() + 1, z = zustand - 10000;
@@ -263,15 +278,15 @@ class Anwendung extends FtKnoten
         emZustand -= 10000;
         int fehler = injektor.fehlerinjektion(schritt);
         if (fehler > 0)
-            say(schritt + " ---------- Fehler ---------- Verf�lschung " + fehler);
+            say(schritt + " ---------- Fehler ---------- Verfälschung " + fehler);
         zustand = ((3 * i + 38) * z + 293 * (i + 3) + emZustand + fehler) % (293 * 293)
                 + 10000;
     }
 
     private int fall()
-    // In Abh�ngigkeit vom momentanen Arbeitsschritt wird pseudozuf�llig einer
-    // von 15  F�llen ausgew�hlt (0 bis 14). Die Methoden sender(), empf() und
-    // initiator() bestimmen, welche Aktion in dem betreffenden Fall ausgef�hrt
+    // In Abhängigkeit vom momentanen Arbeitsschritt wird pseudozufällig einer
+    // von 15  Fällen ausgewählt (0 bis 14). Die Methoden sender(), empf() und
+    // initiator() bestimmen, welche Aktion in dem betreffenden Fall ausgeführt
     // wird (niemals mehrere Aktionen gleichzeitig).
     {
         int x = (schritt + 5) % 293,
@@ -282,7 +297,7 @@ class Anwendung extends FtKnoten
     }
 
     private char sender()
-    // In Abh�ngigkeit vom momentanen Fall wird der Sender einer Nachricht
+    // In Abhängigkeit vom momentanen Fall wird der Sender einer Nachricht
     // bestimmt (-1, wenn keine Nachricht).
     {
         int[] s = {-1, 0, 0, 1, 2, 3, 2, 2, 1, -1, -1, -1, -1, 1, -1};
@@ -290,7 +305,7 @@ class Anwendung extends FtKnoten
     }
 
     private char empfaenger()
-    // In Abh�ngigkeit vom momentanen Fall wird der Empf�nger einer Nachricht
+    // In Abhängigkeit vom momentanen Fall wird der Empfänger einer Nachricht
     // bestimmt (-1, wenn keine Nachricht).
     {
         int[] e = {-1, 1, 2, 2, 3, 2, 1, 0, 0, -1, -1, -1, -1, 2, -1};
@@ -298,15 +313,15 @@ class Anwendung extends FtKnoten
     }
 
     private char initiator()
-    // In Abh�ngigkeit vom momentanen Fall wird der Initiator einer
-    // R�cksetzlinie bestimmt (-1, wenn keine RL).
+    // In Abhängigkeit vom momentanen Fall wird der Initiator einer
+    // Rücksetzlinie bestimmt (-1, wenn keine RL).
     {
         int[] i = {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 0, -1, -1, -1, 2};
         return nodeChr(i[fall()]);
     }
 
     private boolean absoluttest()
-    // Dieser anwendungsabh�ngige Absoluttest liefert true, wenn ein Fehler
+    // Dieser anwendungsabhängige Absoluttest liefert true, wenn ein Fehler
     // erkannt wird. Die Fehlererfassung wird durch die Variable erfassung
     // festgelegt (0 < erfassung <= 1).
     {
@@ -331,24 +346,23 @@ class Anwendung extends FtKnoten
 
 //------------------------------------------------------------------------------
 class Anlauf extends Exception {
-
 }
-// Wenn ein Knoten vom RL-Verwalter zur�ckgesetzt wird, h�lt er diesen
-// zun�chst an, so dass die von der Anwendung aufgerufene Methode keinen
-// R�ckgabewert liefert, sondern die Anwendung erneut anl�uft.
+// Wenn ein Knoten vom RL-Verwalter zurückgesetzt wird, hält er diesen
+// zunächst an, so dass die von der Anwendung aufgerufene Methode keinen
+// Rückgabewert liefert, sondern die Anwendung erneut anläuft.
 
 
 //------------------------------------------------------------------------------
 class Injektor
-// Fehlerinjektor, der Anwendungsdaten verf�lschen kann.
+// Fehlerinjektor, der Anwendungsdaten verfälschen kann.
 //
-// <<<<< Diese Klasse darf nicht ver�ndert werden >>>>>
+// <<<<< Diese Klasse darf nicht verändert werden >>>>>
 //
 {
     class Injektion
             // Injektion eines Fehlers in einen Knoten in einem bestimmten Schritt.
-            // Die Injektionen bilden f�r jeden Knoten eine Liste. Nach erfolgter
-            // Injektion wird das betreffende Injektions-Element aus der Liste gel�scht.
+            // Die Injektionen bilden für jeden Knoten eine Liste. Nach erfolgter
+            // Injektion wird das betreffende Injektions-Element aus der Liste gelöscht.
     {
         int schritt;
         Injektion nf;
@@ -362,7 +376,7 @@ class Injektor
     Injektion injektion;  // Liste der Fehlerinjektionen.
     Random zufall;     // Pseudozufallszahlen-Generator.
     double fehlerWk;   // Wahrscheinlichkeit eines Fehlers in einem Schritt.
-    int anzFehler;  // F�r Statistik: Fehlerinjektionen z�hlen.
+    int anzFehler;  // Für Statistik: Fehlerinjektionen zählen.
 
     Injektor(char myChar, String input) {
         injektion = null;
@@ -410,18 +424,18 @@ class Injektor
 
 
 //------------------------------------------------------------------------------
-@SuppressWarnings("Duplicates")
 class FtVerwalter extends Node
-// Zentralisierter Verwalter aller R�cksetzlinien.
-{ // F�r die Statistik:
-    int anzInitRL,    // Anzahl der initiierten R�cksetzlinien.
-            anzLoeschRL,  // Anzahl der gel�schten R�cksetzlinien.
-            anzZurueck,   // Anzahl der Zur�cksetz-Operationen.
-            anzWeite,     // Anz. des Zur�cks. mit zunehmender R�cksetzweite.
-            anzAnfang;    // Anzahl des Zur�cksetzens auf den Anfang.
+// Zentralisierter Verwalter aller Rücksetzlinien.
+{ // Für die Statistik:
+    int anzInitRL,    // Anzahl der initiierten Rücksetzlinien.
+            anzLoeschRL,  // Anzahl der gelöschten Rücksetzlinien.
+            anzZurueck,   // Anzahl der Zurücksetz-Operationen.
+            anzWeite,     // Anz. des Zurücks. mit zunehmender Rücksetzweite.
+            anzAnfang;    // Anzahl des Zurücksetzens auf den Anfang.
     //
     // *** Ggf. weitere Variablen des RL-Verwalters ***
     //
+
     private ArrayList<String> RpListA = new ArrayList<>();
     private ArrayList<String> RpListB = new ArrayList<>();
     private ArrayList<String> RpListC = new ArrayList<>();
@@ -437,43 +451,134 @@ class FtVerwalter extends Node
     private ArrayList<String> inD = new ArrayList<>();
     private ArrayList<String> outD = new ArrayList<>();
 
+    private int terminationCount = 0;
+    private int frozenThreads = 0;
 
+    //TODO
     public String runNode(String input) throws SoFTException {
         initialisierung();
-        //
-        // *** Aktionen des RL-Verwalters ***
-        //
+        boolean flag = true;
+        while (flag) {
 
-        boolean stop = false;
+            Msg msg = receive("ABCD", never());
 
-        while (!stop) {
-            Msg m = receive("ABCD", time() + 5);
+            if (msg != null) {
 
-            if (m != null) {
-                switch (m.getTy()) {
+                switch (msg.getTy()) {
+                    case 'a':
+                        nTraffic(msg);
+                        break;
                     case 'f':
-                        RlCalculationStart(m.getSe(), number(m.getCo(), 2));
+                        form('f', "").send("ABCD");
                         break;
                     case 'r':
-                        processRpMessage(m);
+                        initRL(msg);
                         break;
-                    case 'a':
-                        saveMessage(m);
-                        break;
+                    case 'c':
+                        ++frozenThreads;
+                        if (frozenThreads >= 4) {
+                            RLMethode();
+                        }
                     case 't':
-                        stop = true;
+                        ++terminationCount;
+                        if (terminationCount >= 4) {
+                            flag = false;
+                        }
+                        break;
+                    default:
+                        say("received message with unsupported type: " + msg.getTy());
                         break;
                 }
+
+
             }
+
         }
 
-        // @debug
-        // printDebugArrays();
+        printDebugArrays();
 
-        return anzInitRL + " RL initiiert, " + anzLoeschRL + " RL gel�scht, "
-                + anzZurueck + " mal zur�ckgesetzt, "
-                + anzWeite + " mal mit zunehmender R�cksetzweite, "
+        return anzInitRL + " RL initiiert, " + anzLoeschRL + " RL gelöscht, "
+                + anzZurueck + " mal zurückgesetzt, "
+                + anzWeite + " mal mit zunehmender Rücksetzweite, "
                 + anzAnfang + " mal auf den Anfang.";
+    }
+
+    //TODO
+    private void RLMethode() throws SoFTException {
+
+        // @debug
+        say("system frozen");
+
+        //TODO
+        // calculate RL
+
+        //TODO
+        //send infos for reset in t
+        form('t', "").send("ABCD");
+    }
+
+
+    private void initRL(Msg msg) {
+        ++anzInitRL;
+        switch (msg.getSe()) {
+            case 'A':
+                RpListA.add(msg.getCo());
+                break;
+            case 'B':
+                RpListB.add(msg.getCo());
+                break;
+            case 'C':
+                RpListC.add(msg.getCo());
+                break;
+            case 'D':
+                RpListD.add(msg.getCo());
+                break;
+        }
+    }
+
+    private void nTraffic(Msg msg) {
+        char sender = msg.getSe();
+        char receiver = word(msg.getCo(), 1).charAt(0);
+        long time = number(msg.getCo(), 2);
+        int step = number(msg.getCo(), 3);
+        int state = number(msg.getCo(), 4);
+        int rpScore = number(msg.getCo(), 5);
+
+        String inContent = time + " " + sender + " " + step + " " + state + " " + rpScore;
+        String outContent = time + " " + receiver + " " + step + " " + state + " " + rpScore;
+
+        //add to in-list
+        switch (receiver) {
+            case 'A':
+                inA.add(inContent);
+                break;
+            case 'B':
+                inB.add(inContent);
+                break;
+            case 'C':
+                inC.add(inContent);
+                break;
+            case 'D':
+                inD.add(inContent);
+                break;
+        }
+
+        //add to out-list
+        switch (sender) {
+            case 'A':
+                outA.add(outContent);
+                break;
+            case 'B':
+                outB.add(outContent);
+                break;
+            case 'C':
+                outC.add(outContent);
+                break;
+            case 'D':
+                outD.add(outContent);
+                break;
+        }
+
     }
 
     private void printDebugArrays() {
@@ -544,218 +649,17 @@ class FtVerwalter extends Node
         System.out.println();
     }
 
-    private void RlCalculationStart(char id, long time) throws SoFTException {
-
-        long t = 0;
-        long aTime, bTime, cTime, dTime;
-
-        aTime = bTime = cTime = dTime = Long.MAX_VALUE;
-
-        switch (id) {
-            case 'A':
-                if (time < aTime) {
-                    aTime = time;
-                }
-                break;
-            case 'B':
-                if (time < bTime) {
-                    bTime = time;
-                }
-                break;
-            case 'C':
-                if (time < cTime) {
-                    cTime = time;
-                }
-                break;
-            case 'D':
-                if (time < dTime) {
-                    dTime = time;
-                }
-                break;
-        }
-
-        // @debug
-        say("processing error from " + id + " at " + time);
-
-        // freeze system
-        form('p', "").send("ABCD");
-
-        for (int i = 0; i < 4; ++i) {
-            boolean flag = true;
-            while (flag) {
-                Msg m = receive("ABCD", time() + 1000);
-                if (m != null) {
-                    if (m.getTy() == 'c') {
-                        flag = false;
-                        if (time() > t) {
-                            t = time();
-                        }
-                    } else if (m.getTy() == 'f') {
-                        switch (id) {
-                            case 'A':
-                                if (number(m.getCo(), 2) < aTime) {
-                                    aTime = time;
-
-                                    // @debug
-                                    say("boi");
-                                }
-                                break;
-                            case 'B':
-                                if (number(m.getCo(), 2) < bTime) {
-                                    bTime = time;
-
-                                    // @debug
-                                    say("boi");
-                                }
-                                break;
-                            case 'C':
-                                if (number(m.getCo(), 2) < cTime) {
-                                    cTime = time;
-
-                                    // @debug
-                                    say("boi");
-                                }
-                                break;
-                            case 'D':
-                                if (number(m.getCo(), 2) < dTime) {
-                                    dTime = time;
-
-                                    // @debug
-                                    say("boi");
-                                }
-                                break;
-                        }
-                    }
-                }
-            }
-        }
-
-        // TODO
-    }
-
-    // TODO: test
-    private void RLcalc(char id, long errorTime) {
-        long newestRP = 0;
-        switch (id) {
-            case 'A':
-                boolean faultyA = true;
-                for (String s : RpListA) {
-                    long messageTime = number(s, 3);
-                    if (messageTime > newestRP && messageTime < errorTime) {
-                        newestRP = messageTime;
-                    }
-                }
-                long faultFlagA = newestRP;
-
-                for (String s : inA) {
-                    long messageTime = number(s, 1);
-
-                    // messageTime
-                    System.out.println("newestRP: " + newestRP + " sTime: " + messageTime + " time: " + errorTime);
-
-                    if (messageTime > newestRP && messageTime < errorTime) {
-
-                        // @debug
-                        say("recursive " + word(s, 2));
-
-                        RLcalc(word(s, 2).charAt(0), number(s, 1));
-                    }
-
-                }
-
-                for (String s : outA) {
-                    long messageTime = number(s, 1);
-
-                    // @debug
-                    System.out.println("newestRP: " + newestRP + " sTime: " + messageTime + " time: " + errorTime);
-
-                    if (newestRP < messageTime && messageTime < errorTime) {
-
-                        // @debug
-                        say("recursive " + word(s, 2));
-
-                        RLcalc(word(s, 2).charAt(0), number(s, 1));
-                    }
-                }
-                break;
-        }
-    }
-
-    private void saveMessage(Msg a) throws SoFTException {
-        char sender = a.getSe();
-        char receiver = word(a.getCo(), 2).charAt(0);
-        long time = number(a.getCo(), 1);
-
-        form('r', "").send(String.valueOf(receiver) + sender);
-
-        String inContent = time + " " + sender;
-        String outContent = time + " " + receiver;
-
-        //add to in-list
-        switch (receiver) {
-            case 'A':
-                inA.add(inContent);
-                break;
-            case 'B':
-                inB.add(inContent);
-                break;
-            case 'C':
-                inC.add(inContent);
-                break;
-            case 'D':
-                inD.add(inContent);
-                break;
-        }
-
-        //add to out-list
-        switch (sender) {
-            case 'A':
-                outA.add(outContent);
-                break;
-            case 'B':
-                outB.add(outContent);
-                break;
-            case 'C':
-                outC.add(outContent);
-                break;
-            case 'D':
-                outD.add(outContent);
-                break;
-        }
-    }
-
     void initialisierung()
     // Initialisierung der globalen Variablen des RL-Verwalters.
     {
-        anzInitRL = 0;   // Noch keine R�cksetzlinie initiiert.
-        anzLoeschRL = 0;   // Noch keine R�cksetzlinie gel�scht.
-        anzZurueck = 0;   // Noch nie zur�ckgesetzt.
-        anzWeite = 0;   // Noch nie mit zunehmender R�cksetzweite.
+        anzInitRL = 0;   // Noch keine Rücksetzlinie initiiert.
+        anzLoeschRL = 0;   // Noch keine Rücksetzlinie gelöscht.
+        anzZurueck = 0;   // Noch nie zurückgesetzt.
+        anzWeite = 0;   // Noch nie mit zunehmender Rücksetzweite.
         anzAnfang = 0;   // Noch nie auf den Anfang.
         //
         // *** Ggf. weitere Initialisierungen ***
         //
-    }
-
-
-    private void processRpMessage(Msg r) {
-
-        // formatting: step state time
-
-        switch (r.getSe()) {
-            case 'A':
-                RpListA.add(r.getCo());
-                break;
-            case 'B':
-                RpListB.add(r.getCo());
-                break;
-            case 'C':
-                RpListC.add(r.getCo());
-                break;
-            case 'D':
-                RpListD.add(r.getCo());
-                break;
-        }
     }
 
     //
@@ -771,7 +675,7 @@ class FtVerwalter extends Node
 //------------------------------------------------------------------------------
 public class Ftvs18_Aufg2 extends SoFT
 //
-// <<<<< Diese Klasse darf nicht ver�ndert werden >>>>>
+// <<<<< Diese Klasse darf nicht verändert werden >>>>>
 //
 {
     static final int korrektEndSchritt = 290;
@@ -780,16 +684,16 @@ public class Ftvs18_Aufg2 extends SoFT
             maxAnzFehler = 0,       // Max. Anzahl der injizierten Fehler.
             minAnzRL = 999999,  // Min. Anzahl der initiierten RL.
             maxAnzRL = 0,       // Max. Anzahl der initiierten RL.
-            minAnzZurueck = 999999,  // Min. Anzahl des Zur�cksetzens.
-            maxAnzZurueck = 0,       // Max. Anzahl des Zur�cksetzens.
+            minAnzZurueck = 999999,  // Min. Anzahl des Zurücksetzens.
+            maxAnzZurueck = 0,       // Max. Anzahl des Zurücksetzens.
             minAnzWeite = 999999,  // Min. Anzahl mit zunehmender Weite.
             maxAnzWeite = 0,       // Max. Anzahl mit zunehmender Weite.
-            minAnzAnfang = 999999,  // Min. Anzahl des Zur�cks. auf den Anfang.
-            maxAnzAnfang = 0;       // Max. Anzahl des Zur�cks. auf den Anfang.
+            minAnzAnfang = 999999,  // Min. Anzahl des Zurücks. auf den Anfang.
+            maxAnzAnfang = 0;       // Max. Anzahl des Zurücks. auf den Anfang.
 
     public int result(String input, String[] output)
-    //            korrekter    mit Zur�ck-  mit zunehmender  mit Zur�cksetzen
-    //            Endzustand   setzen       R�cksetzweite    auf den Anfang
+    //            korrekter    mit Zurück-  mit zunehmender  mit Zurücksetzen
+    //            Endzustand   setzen       Rücksetzweite    auf den Anfang
     // result 0:    ja           nein         nein             nein
     // result 1:    ja           ja           nein             nein
     // result 2:    ja           ja           ja               nein
@@ -799,7 +703,7 @@ public class Ftvs18_Aufg2 extends SoFT
     {
         boolean korrekt = true;
         int anzFehler = 0;
-        if (exec() <= 1)  // Beginne mit der Z�hlung neu beim ersten Lauf.
+        if (exec() <= 1)  // Beginne mit der Zählung neu beim ersten Lauf.
         {
             minAnzFehler = 999999;
             maxAnzFehler = 0;
@@ -853,7 +757,7 @@ public class Ftvs18_Aufg2 extends SoFT
 
     String minmax(int x, int y)
     // Liefert nur eine Zahl, wenn x == y. Andernfall werden beide Zahlen
-    // x und y zur�ckgegeben
+    // x und y zurückgegeben
     {
         if (x == y) return "" + x;
         else if (x < 999999) return x + "-" + y;
@@ -861,13 +765,13 @@ public class Ftvs18_Aufg2 extends SoFT
     }
 
     public static void main(String[] unbenutzt) {
-        String bezeichnung = "Ftvs18_Aufg2: Ausbreitung von R�cksetzlinien"
-                + " - Musterl�sung";
+        String bezeichnung = "Ftvs18_Aufg2: Ausbreitung von Rücksetzlinien"
+                + " - Musterlösung";
         String beschreibung = "Eingabezeile: "
                 + " ( <z> | \"zu\" ) { \",\" <k> <s> { <s> } | <k> \"wk\" <w> } "
                 + "\",\" <a>\n"
                 + "   wobei   <z>  Startwert des Pseudozufallszahlen-Generators\n"
-                + "           zu   Zuf�lliger Startwert des Pseudozufallszahlen-"
+                + "           zu   Zufälliger Startwert des Pseudozufallszahlen-"
                 + "Generators\n"
                 + "           <k>  Bezeichnung eines Knotens\n"
                 + "           <s>  Schritt, in dem ein Fehler aufritt\n"

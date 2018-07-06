@@ -3,7 +3,6 @@
 package Uebung02;
 
 import SoFTlib.*;
-import Uebung00.SoftEinfuehrung;
 
 import static SoFTlib.Helper.*;
 
@@ -18,7 +17,7 @@ abstract class FtKnoten extends Node
     //
     // *** Ggf. weitere Variablen des Knotens ***
     //
-    static int globalRPscore = 1;
+    static int globalRPscore = 0;
     int RPscore; // RP number
 
     public String runNode(String input) throws SoFTException {
@@ -76,6 +75,8 @@ abstract class FtKnoten extends Node
             while (msgE != null) {
 
                 switch (msgE.getTy()) {
+                    case 'n':
+                        return msgE.getCo();               // Nutznachricht wurde empfangen.
                     case 'f':
 
                         // @debug
@@ -88,13 +89,12 @@ abstract class FtKnoten extends Node
                         msgE = receive("E", never());
 
                         // empty messages from old run
-                        msgE = receive("ABCD", time() + 1);
-                        while (msgE != null) {
-                            msgE = receive("ABCD", time() + 1);
-                        }
+                        emptyInbox();
 
                         //TODO
                         // reset
+                        setzeSchritt(number(msgE.getCo(), 1));
+                        setzeZustand(number(msgE.getCo(), 2));
 
 
                         // @debug
@@ -119,9 +119,9 @@ abstract class FtKnoten extends Node
                         } else if (score < RPscore) {
 
                             //send a "copy" to E
-                            form('a', msg.getSe() + " " + time() + " " + msg.getCo() + " " + RPscore).send("E");
+                            form('a', msg.getSe() + " " + time() + " " + msg.getCo()).send("E");
 
-                            form('u', RPscore).send(msg.getSe());
+                            //form('u', RPscore).send(msg.getSe());
                         }
                         return msg.getCo();               // Nutznachricht wurde empfangen.
                     case 'u':
@@ -143,6 +143,13 @@ abstract class FtKnoten extends Node
         //
     }
 
+    private void emptyInbox() throws SoFTException {
+        Msg msg = receive("ABCD", time() + 1);
+        while (msg != null) {
+            msg = receive("ABCD", time() + 1);
+        }
+    }
+
     protected void initiiereRL(String inhalt, boolean anlaufend)
             throws Anlauf, SoFTException
     // Operator, den die Anwendung aufruft, um eine Rücksetzlinie zu initiieren.
@@ -152,13 +159,14 @@ abstract class FtKnoten extends Node
         // *** Diese Methode ggf. modifizieren ***
         //
         if (!anlaufend) {
-            form('r', inhalt + " " + globalRPscore).send('E');
             RPscore = ++globalRPscore;
+            form('r', inhalt + " " + globalRPscore + " " + time()).send('E');
+
         }
     }
 
     protected void initiateRP(String content) throws SoFTException {
-        form('r', content + " " + RPscore).send('E');
+        form('r', content + " " + RPscore + " " +  time()).send('E');
     }
 
     protected void lokaleArbeit()
@@ -442,17 +450,14 @@ class FtVerwalter extends Node
     private ArrayList<String> RpListD = new ArrayList<>();
 
     // formatting: in-lists: (time, sender) out-lists: (time, receiver)
-    private ArrayList<String> inA = new ArrayList<>();
-    private ArrayList<String> outA = new ArrayList<>();
-    private ArrayList<String> inB = new ArrayList<>();
-    private ArrayList<String> outB = new ArrayList<>();
-    private ArrayList<String> inC = new ArrayList<>();
-    private ArrayList<String> outC = new ArrayList<>();
-    private ArrayList<String> inD = new ArrayList<>();
-    private ArrayList<String> outD = new ArrayList<>();
+    private ArrayList<String> messageList = new ArrayList<>();
 
     private int terminationCount = 0;
     private int frozenThreads = 0;
+    private boolean errorInA = false;
+    private boolean errorInB = false;
+    private boolean errorInC = false;
+    private boolean errorInD = false;
 
     //TODO
     public String runNode(String input) throws SoFTException {
@@ -470,6 +475,20 @@ class FtVerwalter extends Node
                         break;
                     case 'f':
                         form('f', "").send("ABCD");
+                        switch (msg.getSe()) {
+                            case 'A':
+                                errorInA = true;
+                                break;
+                            case 'B':
+                                errorInB = true;
+                                break;
+                            case 'C':
+                                errorInC = true;
+                                break;
+                            case 'D':
+                                errorInD = true;
+                                break;
+                        }
                         break;
                     case 'r':
                         initRL(msg);
@@ -478,6 +497,7 @@ class FtVerwalter extends Node
                         ++frozenThreads;
                         if (frozenThreads >= 4) {
                             RLMethode();
+                            frozenThreads = 0;
                         }
                     case 't':
                         ++terminationCount;
@@ -515,6 +535,9 @@ class FtVerwalter extends Node
         //TODO
         //send infos for reset in t
         form('t', "").send("ABCD");
+
+        //all errors resolved
+        errorInA = errorInB = errorInC = errorInD = false;
     }
 
 
@@ -537,47 +560,14 @@ class FtVerwalter extends Node
     }
 
     private void nTraffic(Msg msg) {
-        char sender = msg.getSe();
-        char receiver = word(msg.getCo(), 1).charAt(0);
+        char sender = word(msg.getCo(), 1).charAt(0);
+        char receiver = msg.getSe();
         long time = number(msg.getCo(), 2);
         int step = number(msg.getCo(), 3);
         int state = number(msg.getCo(), 4);
         int rpScore = number(msg.getCo(), 5);
 
-        String inContent = time + " " + sender + " " + step + " " + state + " " + rpScore;
-        String outContent = time + " " + receiver + " " + step + " " + state + " " + rpScore;
-
-        //add to in-list
-        switch (receiver) {
-            case 'A':
-                inA.add(inContent);
-                break;
-            case 'B':
-                inB.add(inContent);
-                break;
-            case 'C':
-                inC.add(inContent);
-                break;
-            case 'D':
-                inD.add(inContent);
-                break;
-        }
-
-        //add to out-list
-        switch (sender) {
-            case 'A':
-                outA.add(outContent);
-                break;
-            case 'B':
-                outB.add(outContent);
-                break;
-            case 'C':
-                outC.add(outContent);
-                break;
-            case 'D':
-                outD.add(outContent);
-                break;
-        }
+        messageList.add(time + " " + sender + " " + receiver + " " + step + " " + state + " " + rpScore);
 
     }
 
@@ -607,43 +597,8 @@ class FtVerwalter extends Node
         }
         System.out.println("\n--- NA ---\n");
 
-        System.out.println("--- inA ---");
-        for (String s : inA) {
-            System.out.println(s);
-        }
-        System.out.println();
-        System.out.println("--- outA ---");
-        for (String s : outA) {
-            System.out.println(s);
-        }
-        System.out.println();
-        System.out.println("--- inB ---");
-        for (String s : inB) {
-            System.out.println(s);
-        }
-        System.out.println();
-        System.out.println("--- outB ---");
-        for (String s : outB) {
-            System.out.println(s);
-        }
-        System.out.println();
-        System.out.println("--- inC ---");
-        for (String s : inC) {
-            System.out.println(s);
-        }
-        System.out.println();
-        System.out.println("--- outC ---");
-        for (String s : outC) {
-            System.out.println(s);
-        }
-        System.out.println();
-        System.out.println("--- inD ---");
-        for (String s : inD) {
-            System.out.println(s);
-        }
-        System.out.println();
-        System.out.println("--- outD ---");
-        for (String s : outD) {
+        System.out.println("--- messageList ---");
+        for (String s : messageList) {
             System.out.println(s);
         }
         System.out.println();

@@ -86,30 +86,12 @@ abstract class FtKnoten extends Node
                         // inform E thread is frozen
                         form('c', time()).send('E');
 
-                        // wait for all threads to freeze and info on reset, waiting for r
-                        msgE = receive("E", never());
+                        // TODO
+                        // sleep
+                        Msg wait = receive('E', never());
 
+                        say("global worming");
 
-                        // @debug
-                        say("order to restart received! Step: " + number(msgE.getCo(), 1) + ", state: " + number(msgE.getCo(), 2));
-
-                        if (!msgE.getCo().equals("")) {
-
-                            // empty messages from old run
-                            System.out.println("deleted " + emptyInbox() + " messages");
-
-                            setzeSchritt(number(msgE.getCo(), 1));
-                            setzeZustand(number(msgE.getCo(), 2));
-
-                            // @debug
-                            say("New step: " + schritt() + ", new state: " + zustand());
-
-                            //throw new Anlauf();
-
-
-                        } else {
-                            say("not resetted");
-                        }
                         break;
                 }
 
@@ -472,8 +454,8 @@ class FtVerwalter extends Node
     // formatting: in-lists: (time, sender) out-lists: (time, receiver)
     private ArrayList<String> messageList = new ArrayList<>();
 
-    private int terminationCount = 0;
-    private int frozenThreads = 0;
+    private static int terminationCount = 0;
+    private static int frozenThreads = 0;
     private boolean errorInA = false;
     private boolean errorInB = false;
     private boolean errorInC = false;
@@ -492,6 +474,9 @@ class FtVerwalter extends Node
                 switch (msg.getTy()) {
                     case 'a':
                         nTraffic(msg);
+
+                        // @debug
+                        //form('f', "").send("ABCD");
                         break;
                     case 'f':
                         if (!errorInA && !errorInB && !errorInC && !errorInD) {
@@ -521,9 +506,9 @@ class FtVerwalter extends Node
                             RLMethode();
                             frozenThreads = 0;
                         }
+                        break;
                     case 't':
                         ++terminationCount;
-
                         if (terminationCount >= 4) {
                             flag = false;
                         }
@@ -622,8 +607,10 @@ class FtVerwalter extends Node
         if (latestRP == 0) {
             say("cant reset to start yet");
             //TODO reset to start
-/*
-            if (errorInA) {
+
+            form('r', "").send("ABCD");
+
+/*            if (errorInA) {
                 form('r', "0 10000").send("A");
                 resendMessages(0, 'A');
             } else {
@@ -646,8 +633,8 @@ class FtVerwalter extends Node
                 resendMessages(0, 'D');
             } else {
                 form('r', "").send("D");
-            }*/
-
+            }
+*/
             // valid RP found
         } else {
 

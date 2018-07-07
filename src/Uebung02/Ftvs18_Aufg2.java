@@ -20,9 +20,16 @@ abstract class FtKnoten extends Node
     static int globalRPscore = 0;
     int RPscore; // RP number
 
+    int step = 0;
+    int state = 10000;
+
     public String runNode(String input) throws SoFTException {
         anzInitRL = 0;            // Noch keine RL initiiert.
         initialisierung(input);   // Anwendung startet.
+
+        // FIXME
+        //setzeSchritt(step);
+        //setzeZustand(state);
         lauf();                   // Anwendung läuft.
         return terminierung();    // Knoten beendet seine Arbeit.
         //
@@ -82,6 +89,7 @@ abstract class FtKnoten extends Node
                         // @debug
                         say("It's freezing outside");
 
+
                         // inform E thread is frozen
                         form('c', time()).send('E');
 
@@ -93,12 +101,64 @@ abstract class FtKnoten extends Node
 
                         //TODO
                         // reset
-                        setzeSchritt(number(msgE.getCo(), 1));
-                        setzeZustand(number(msgE.getCo(), 2));
+                        //setzeSchritt(number(msgE.getCo(), 1));
+                       // setzeZustand(number(msgE.getCo(), 2));
 
+                        msgE = receive("E", never());
 
                         // @debug
-                        say("unfrozen");
+                        say("order to restart received! Step: " + number(msgE.getCo(), 1) + ", state: " + number(msgE.getCo(), 2));
+
+                        if (number(msgE.getCo(), 1 ) == -1 && number(msgE.getCo(), 2) == -1) {
+                            setzeSchritt(0);
+                            setzeZustand(10000);
+
+                        } else {
+                            setzeSchritt(number(msgE.getCo(), 1));
+                            setzeZustand(number(msgE.getCo(), 2));
+                            //step = number(msgE.getCo(), 1);
+                            //state = number(msgE.getCo(), 2);
+                        }
+
+                        // @debug
+                        say("New step: " + schritt() + ", new state: " + zustand());
+
+                        //throw new Anlauf();
+
+                        // restart
+                        runNode("");
+                        return terminierung();
+
+                        // @debug
+                        //say("unfrozen");
+                    case 'r':
+
+                        terminierung();
+
+                        //Msg m = receive("E", never());
+
+                        // @debug
+                        say("order to restart received! Step: " + number(msgE.getCo(), 1) + ", state: " + number(msgE.getCo(), 2));
+
+                        if (number(msgE.getCo(), 1 ) == -1 && number(msgE.getCo(), 2) == -1) {
+                            setzeSchritt(0);
+                            setzeZustand(10000);
+
+                        } else {
+                            setzeSchritt(number(msgE.getCo(), 1));
+                            setzeZustand(number(msgE.getCo(), 2));
+                            //step = number(msgE.getCo(), 1);
+                            //state = number(msgE.getCo(), 2);
+                        }
+
+                        // @debug
+                        say("New step: " + schritt() + ", new state: " + zustand());
+
+                        //throw new Anlauf();
+
+                        // restart
+                        runNode("");
+                        return terminierung();
                 }
 
                 msgE = receive("E", time() + 1);
@@ -161,7 +221,7 @@ abstract class FtKnoten extends Node
         if (!anlaufend) {
             RPscore = ++globalRPscore;
             form('r', inhalt + " " + globalRPscore + " " + time()).send('E');
-
+            say("RP created, global score: " + globalRPscore);
         }
     }
 
@@ -232,6 +292,10 @@ class Anwendung extends FtKnoten
     void lauf() throws SoFTException
     // Ausführung des (simulierten) Anwendungsprogramms.
     {
+        // @debug
+        System.out.println(time() + " " + myChar() + " is in lauf(), step: " + schritt + ", state: " + zustand);
+
+
         while (schritt < Ftvs18_Aufg2.korrektEndSchritt) {
             String seInhalt = schritt + " " + zustand,
                     emInhalt = null;
@@ -251,6 +315,9 @@ class Anwendung extends FtKnoten
                 if (absoluttest()) fehlermeldung();  // Prüfe den neuen Zustand.
             } catch (Anlauf abbruch)    // Nach dem Abbruch wurde die Anwendung zurueck-
             {
+                // @debug
+                say("anlaufend = true");
+
                 anlaufend = true;  // gesetzt und läuft nun wieder an.
             }
         }
@@ -459,6 +526,8 @@ class FtVerwalter extends Node
     private boolean errorInC = false;
     private boolean errorInD = false;
 
+    private boolean error = false;
+
     //TODO
     public String runNode(String input) throws SoFTException {
         initialisierung();
@@ -475,6 +544,7 @@ class FtVerwalter extends Node
                         break;
                     case 'f':
                         form('f', "").send("ABCD");
+                        error = true;
                         switch (msg.getSe()) {
                             case 'A':
                                 errorInA = true;
@@ -500,7 +570,11 @@ class FtVerwalter extends Node
                             frozenThreads = 0;
                         }
                     case 't':
+                        say("error: " + error + ", termination count: " + terminationCount);
+
                         ++terminationCount;
+
+                        // FIXME
                         if (terminationCount >= 4) {
                             flag = false;
                         }
@@ -523,11 +597,39 @@ class FtVerwalter extends Node
                 + anzAnfang + " mal auf den Anfang.";
     }
 
+    private String getLastRp(ArrayList<String> list) {
+        if (list != null) {
+            int max = number(list.get(0), 2);
+            String rp = "";
+            for (String s : list) {
+                if (number(s, 2) > max) {
+                    max = number(s, 2);
+                    rp = s;
+                }
+            }
+            return rp;
+        }
+        return "";
+    }
+
     //TODO
     private void RLMethode() throws SoFTException {
 
         // @debug
         say("system frozen");
+
+        String lastRpA = getLastRp(RpListA);
+        String lastRpB = getLastRp(RpListB);
+        String lastRpC = getLastRp(RpListC);
+        String lastRpD = getLastRp(RpListD);
+
+        // @debug
+        System.out.println("last RPs: A: " + lastRpA + ", B: " + lastRpB + ", C: " + lastRpC + ", D: " + lastRpD);
+
+        form('r', number(lastRpA, 1) + " " + number(lastRpA, 2)).send('A');
+        form('r', number(lastRpB, 1) + " " + number(lastRpB, 2)).send('B');
+        form('r', number(lastRpC, 1) + " " + number(lastRpC, 2)).send('C');
+        form('r', number(lastRpD, 1) + " " + number(lastRpD, 2)).send('D');
 
         //TODO
         // calculate RL
@@ -538,6 +640,8 @@ class FtVerwalter extends Node
 
         //all errors resolved
         errorInA = errorInB = errorInC = errorInD = false;
+
+        error = false;
     }
 
 

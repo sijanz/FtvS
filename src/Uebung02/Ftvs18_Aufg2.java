@@ -1,5 +1,6 @@
 // Übungen zur Vorlesung "Fehlertolerante verteilte Systeme" im SS 2018.
 // Aufgabe 2: Ausbreitung von Rücksetzlinien.
+
 package Uebung02;
 
 import SoFTlib.*;
@@ -20,16 +21,9 @@ abstract class FtKnoten extends Node
     static int globalRPscore = 0;
     int RPscore; // RP number
 
-    int step = 0;
-    int state = 10000;
-
     public String runNode(String input) throws SoFTException {
         anzInitRL = 0;            // Noch keine RL initiiert.
         initialisierung(input);   // Anwendung startet.
-
-        // FIXME
-        //setzeSchritt(step);
-        //setzeZustand(state);
         lauf();                   // Anwendung läuft.
         return terminierung();    // Knoten beendet seine Arbeit.
         //
@@ -89,76 +83,34 @@ abstract class FtKnoten extends Node
                         // @debug
                         say("It's freezing outside");
 
-
                         // inform E thread is frozen
                         form('c', time()).send('E');
 
-                        // wait for all threads to freeze and info on reset
+                        // wait for all threads to freeze and info on reset, waiting for r
                         msgE = receive("E", never());
 
-                        // empty messages from old run
-                        emptyInbox();
-
-                        //TODO
-                        // reset
-                        //setzeSchritt(number(msgE.getCo(), 1));
-                       // setzeZustand(number(msgE.getCo(), 2));
-
-                        msgE = receive("E", never());
 
                         // @debug
                         say("order to restart received! Step: " + number(msgE.getCo(), 1) + ", state: " + number(msgE.getCo(), 2));
 
-                        if (number(msgE.getCo(), 1 ) == -1 && number(msgE.getCo(), 2) == -1) {
-                            setzeSchritt(0);
-                            setzeZustand(10000);
+                        if (!msgE.getCo().equals("")) {
 
-                        } else {
+                            // empty messages from old run
+                            System.out.println("deleted " + emptyInbox() + " messages");
+
                             setzeSchritt(number(msgE.getCo(), 1));
                             setzeZustand(number(msgE.getCo(), 2));
-                            //step = number(msgE.getCo(), 1);
-                            //state = number(msgE.getCo(), 2);
-                        }
 
-                        // @debug
-                        say("New step: " + schritt() + ", new state: " + zustand());
+                            // @debug
+                            say("New step: " + schritt() + ", new state: " + zustand());
 
-                        //throw new Anlauf();
+                            //throw new Anlauf();
 
-                        // restart
-                        runNode("");
-                        return terminierung();
-
-                        // @debug
-                        //say("unfrozen");
-                    case 'r':
-
-                        terminierung();
-
-                        //Msg m = receive("E", never());
-
-                        // @debug
-                        say("order to restart received! Step: " + number(msgE.getCo(), 1) + ", state: " + number(msgE.getCo(), 2));
-
-                        if (number(msgE.getCo(), 1 ) == -1 && number(msgE.getCo(), 2) == -1) {
-                            setzeSchritt(0);
-                            setzeZustand(10000);
 
                         } else {
-                            setzeSchritt(number(msgE.getCo(), 1));
-                            setzeZustand(number(msgE.getCo(), 2));
-                            //step = number(msgE.getCo(), 1);
-                            //state = number(msgE.getCo(), 2);
+                            say("not resetted");
                         }
-
-                        // @debug
-                        say("New step: " + schritt() + ", new state: " + zustand());
-
-                        //throw new Anlauf();
-
-                        // restart
-                        runNode("");
-                        return terminierung();
+                        break;
                 }
 
                 msgE = receive("E", time() + 1);
@@ -203,11 +155,14 @@ abstract class FtKnoten extends Node
         //
     }
 
-    private void emptyInbox() throws SoFTException {
+    private int emptyInbox() throws SoFTException {
+        int num = 0;
         Msg msg = receive("ABCD", time() + 1);
         while (msg != null) {
+            ++num;
             msg = receive("ABCD", time() + 1);
         }
+        return num;
     }
 
     protected void initiiereRL(String inhalt, boolean anlaufend)
@@ -221,12 +176,12 @@ abstract class FtKnoten extends Node
         if (!anlaufend) {
             RPscore = ++globalRPscore;
             form('r', inhalt + " " + globalRPscore + " " + time()).send('E');
-            say("RP created, global score: " + globalRPscore);
+
         }
     }
 
     protected void initiateRP(String content) throws SoFTException {
-        form('r', content + " " + RPscore + " " +  time()).send('E');
+        form('r', content + " " + RPscore + " " + time()).send('E');
     }
 
     protected void lokaleArbeit()
@@ -257,6 +212,11 @@ abstract class FtKnoten extends Node
                 : (anzInitRL < 100 ? " " + anzInitRL : "" + anzInitRL));
         return ",  " + a + " RL initiiert";
     }
+
+    void setGlobalRPscore(int num) {
+        globalRPscore = num;
+    }
+
 }
 
 //
@@ -292,10 +252,6 @@ class Anwendung extends FtKnoten
     void lauf() throws SoFTException
     // Ausführung des (simulierten) Anwendungsprogramms.
     {
-        // @debug
-        System.out.println(time() + " " + myChar() + " is in lauf(), step: " + schritt + ", state: " + zustand);
-
-
         while (schritt < Ftvs18_Aufg2.korrektEndSchritt) {
             String seInhalt = schritt + " " + zustand,
                     emInhalt = null;
@@ -315,9 +271,6 @@ class Anwendung extends FtKnoten
                 if (absoluttest()) fehlermeldung();  // Prüfe den neuen Zustand.
             } catch (Anlauf abbruch)    // Nach dem Abbruch wurde die Anwendung zurueck-
             {
-                // @debug
-                say("anlaufend = true");
-
                 anlaufend = true;  // gesetzt und läuft nun wieder an.
             }
         }
@@ -526,8 +479,6 @@ class FtVerwalter extends Node
     private boolean errorInC = false;
     private boolean errorInD = false;
 
-    private boolean error = false;
-
     //TODO
     public String runNode(String input) throws SoFTException {
         initialisierung();
@@ -543,8 +494,9 @@ class FtVerwalter extends Node
                         nTraffic(msg);
                         break;
                     case 'f':
-                        form('f', "").send("ABCD");
-                        error = true;
+                        if (!errorInA && !errorInB && !errorInC && !errorInD) {
+                            form('f', "").send("ABCD");
+                        }
                         switch (msg.getSe()) {
                             case 'A':
                                 errorInA = true;
@@ -570,11 +522,8 @@ class FtVerwalter extends Node
                             frozenThreads = 0;
                         }
                     case 't':
-                        say("error: " + error + ", termination count: " + terminationCount);
-
                         ++terminationCount;
 
-                        // FIXME
                         if (terminationCount >= 4) {
                             flag = false;
                         }
@@ -597,51 +546,180 @@ class FtVerwalter extends Node
                 + anzAnfang + " mal auf den Anfang.";
     }
 
-    private String getLastRp(ArrayList<String> list) {
-        if (list != null) {
-            int max = number(list.get(0), 2);
-            String rp = "";
-            for (String s : list) {
-                if (number(s, 2) > max) {
-                    max = number(s, 2);
-                    rp = s;
-                }
-            }
-            return rp;
-        }
-        return "";
-    }
-
     //TODO
     private void RLMethode() throws SoFTException {
 
-        // @debug
-        say("system frozen");
+        ArrayList<Integer> legitRPs = new ArrayList<>();
 
-        String lastRpA = getLastRp(RpListA);
-        String lastRpB = getLastRp(RpListB);
-        String lastRpC = getLastRp(RpListC);
-        String lastRpD = getLastRp(RpListD);
-
-        // @debug
-        System.out.println("last RPs: A: " + lastRpA + ", B: " + lastRpB + ", C: " + lastRpC + ", D: " + lastRpD);
-
-        form('r', number(lastRpA, 1) + " " + number(lastRpA, 2)).send('A');
-        form('r', number(lastRpB, 1) + " " + number(lastRpB, 2)).send('B');
-        form('r', number(lastRpC, 1) + " " + number(lastRpC, 2)).send('C');
-        form('r', number(lastRpD, 1) + " " + number(lastRpD, 2)).send('D');
-
-        //TODO
         // calculate RL
+        for (String a : RpListA) {
+            for (String b : RpListB) {
+                for (String c : RpListC) {
+                    for (String d : RpListD) {
 
-        //TODO
-        //send infos for reset in t
-        form('t', "").send("ABCD");
+                        // array to save current values for a, b, c and d
+                        int[] array = {0, 0, 0, 0};
+
+                        // save value if node has an Error
+                        if (errorInA) {
+                            array[0] = number(a, 3);
+                        }
+                        if (errorInB) {
+                            array[1] = number(b, 3);
+                        }
+                        if (errorInC) {
+                            array[2] = number(c, 3);
+                        }
+                        if (errorInD) {
+                            array[3] = number(d, 3);
+                        }
+
+                        // find latestRP value in array (but any value that is not 0 works)
+                        int highest = 0;
+                        for (int i = 0; i < array.length; ++i) {
+                            if (array[i] > highest) {
+                                highest = array[i];
+                            }
+                        }
+
+                        boolean flag = true;
+
+                        // check that every value in the array is either equal to latestRP or 0
+                        // if not RPs dont form a RL
+                        for (int i = 0; i < array.length; ++i) {
+                            if (!(array[i] == highest || array[i] == 0)) {
+                                flag = false;
+                            }
+                        }
+
+                        // if we have a valid RL we need to check if we haven't already found it before
+                        if (flag) {
+                            for (int i : legitRPs) {
+                                if (i == highest) {
+                                    flag = false;
+                                }
+                            }
+                        }
+
+                        // if RL is valid AND not yet in legitRPs, it's saved in legitRPs
+                        if (flag) {
+                            legitRPs.add(highest);
+                        }
+                    }
+                }
+            }
+        }
+
+        // find latest RP in legitRPs
+        int latestRP = 0;
+        for (int i : legitRPs) {
+            if (i > latestRP) {
+                latestRP = i;
+            }
+        }
+
+        // no valid RP found - need to reset to start
+        if (latestRP == 0) {
+            say("cant reset to start yet");
+            //TODO reset to start
+/*
+            if (errorInA) {
+                form('r', "0 10000").send("A");
+                resendMessages(0, 'A');
+            } else {
+                form('r', "").send("A");
+            }
+            if (errorInB) {
+                form('t', "0 10000").send("B");
+                resendMessages(0, 'B');
+            } else {
+                form('r', "").send("B");
+            }
+            if (errorInC) {
+                form('r', "0 10000").send("C");
+                resendMessages(0, 'C');
+            } else {
+                form('r', "").send("C");
+            }
+            if (errorInD) {
+                form('r', "0 10000").send("D");
+                resendMessages(0, 'D');
+            } else {
+                form('r', "").send("D");
+            }*/
+
+            // valid RP found
+        } else {
+
+            String aContent = "";
+            String bContent = "";
+            String cContent = "";
+            String dContent = "";
+            long aTime = 0;
+            long bTime = 0;
+            long cTime = 0;
+            long dTime = 0;
+
+            //get full RP
+            for (String a : RpListA) {
+                if (number(a, 3) == latestRP) {
+                    aContent = number(a, 1) + " " + number(a, 2);
+                    aTime = number(a, 4);
+                }
+            }
+            for (String b : RpListB) {
+                if (number(b, 3) == latestRP) {
+                    bContent = number(b, 1) + " " + number(b, 2);
+                    bTime = number(b, 4);
+                }
+            }
+            for (String c : RpListC) {
+                if (number(c, 3) == latestRP) {
+                    cContent = number(c, 1) + " " + number(c, 2);
+                    cTime = number(c, 4);
+                }
+            }
+            for (String d : RpListD) {
+                if (number(d, 3) == latestRP) {
+                    dContent = number(d, 1) + " " + number(d, 2);
+                    dTime = number(d, 4);
+                }
+            }
+
+            //send information to nodes
+            say("reset to RP: " + latestRP);
+            form('r', aContent).send("A");
+            form('r', bContent).send("B");
+            form('r', cContent).send("C");
+            form('r', dContent).send("D");
+
+            if (!aContent.equals("")) {
+                resendMessages(aTime, 'A');
+            }
+            if (!bContent.equals("")) {
+                resendMessages(bTime, 'B');
+            }
+            if (!cContent.equals("")) {
+                resendMessages(cTime, 'C');
+            }
+            if (!dContent.equals("")) {
+                resendMessages(dTime, 'D');
+            }
+
+        }
 
         //all errors resolved
         errorInA = errorInB = errorInC = errorInD = false;
+    }
 
-        error = false;
+    //resend all Messages to node, after time
+    private void resendMessages(long time, char node) throws SoFTException {
+        for (String s : messageList) {
+            if (number(s, 1) > time && word(s, 3).charAt(0) == node) {
+                String content = word(s, 4) + " " + word(s, 5);
+                form('n', content).send(node);
+            }
+        }
     }
 
 
@@ -677,6 +755,8 @@ class FtVerwalter extends Node
 
     private void printDebugArrays() {
         System.out.println();
+        System.out.println("Step State RPscore Time");
+        System.out.println();
         System.out.println("--- RP list A ---");
         for (String s : RpListA) {
             System.out.println(s);
@@ -700,7 +780,8 @@ class FtVerwalter extends Node
             System.out.println(s);
         }
         System.out.println("\n--- NA ---\n");
-
+        System.out.println("Time Sender Receiver Step State RPscore");
+        System.out.println();
         System.out.println("--- messageList ---");
         for (String s : messageList) {
             System.out.println(s);

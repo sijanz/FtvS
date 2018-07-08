@@ -76,29 +76,28 @@ abstract class FtKnoten extends Node
         Msg msgFromE = receive("E", time() + 5);
         while (msgFromE != null) {
             switch (msgFromE.getTy()) {
-                case 'n':
-                    return msgFromE.getCo();
                 case 'h':
 
-                    // send confirmation of holding
-                    form('c', "").send("E");
+                    // confirm holding
+                    form('c', schritt() + " HOLDING").send("E");
 
-                    emptyInbox();
+                    msgFromE = receive("E", time() + 1500);
 
-                    // holding
-                    Msg reconfiguration = receive('E', never());
+                    if(msgFromE != null) {
+                        say("RELEASED");
 
-                    if (reconfiguration != null && reconfiguration.getTy() == 'r' && !reconfiguration.getCo().equals("")) {
-
-                        // @debug
-                        say("reconfiguration message received - new step " + number(reconfiguration.getCo(), 1) + ", new state: " + number(reconfiguration.getCo(), 2));
                         // TODO
-                        setzeSchritt(number(reconfiguration.getCo(), 1));
-                        setzeZustand(number(reconfiguration.getCo(), 2));
-                        throw new Anlauf();
+
+
+                    } else {
+                        // TODO
+                        // @debug
+                        say("SPECIAL CASE NOT YET IMPLEMENTED");
                     }
 
                     break;
+                case 'n':
+                    return msgFromE.getCo();
                 default:
                     say("unsupported message type: " + msgFromE.getTy());
                     break;
@@ -133,15 +132,6 @@ abstract class FtKnoten extends Node
             }
         }
         return "";
-    }
-
-    private void emptyInbox() throws SoFTException {
-        Msg msg = receive("ABCD", time() + 1);
-        while (msg != null) {
-            //send a "copy" to E
-            form('a', msg.getSe() + " " + time() + " " + msg.getCo()).send("E");
-            msg = receive("ABCD", time() + 1);
-        }
     }
 
 
@@ -446,6 +436,9 @@ class FtVerwalter extends Node
     // counter for termination messages
     int terminationCount = 0;
 
+    // counts holding nodes
+    int holdingNodes = 0;
+
     // lists for saving RPs
     // formatting: step state rpNum time
     private ArrayList<String> rpListA = new ArrayList<>();
@@ -464,11 +457,12 @@ class FtVerwalter extends Node
     // array to save errors
     private boolean[] errorArray = {false, false, false, false};
 
-    // stores the amount of confirmations received
-    int confirmationCount = 0;
+    // array to save in what step the error was observed
+    private int[] errorIntArray = {300, 300, 300, 300};
 
     public String runNode(String input) throws SoFTException {
         initialisierung();
+
 
         boolean running = true;
 
@@ -479,40 +473,64 @@ class FtVerwalter extends Node
 
             if (message != null) {
                 switch (message.getTy()) {
+                    case 'c':
+                        if(++holdingNodes >= (4-terminationCount)) {
+
+                            String aContent = "";
+                            String bContent = "";
+                            String cContent = "";
+                            String dContent = "";
+
+                            // TODO calculate contents
+                            // @debug
+                            say("set to rl: " + calculateRl());
+
+                            form('r', aContent).send("A");
+                            form('r', bContent).send("B");
+                            form('r', cContent).send("C");
+                            form('r', dContent).send("D");
+
+                            // all errors should be resolved
+                            resetErrorArrays();
+                            // release nodes
+                            holdingNodes = 0;
+                        }
+
+                        break;
 
                     // error message
                     case 'f':
-                        say("ALARM! Error at step " + number(message.getCo(), 1));
+
+                        boolean flag = true;
+                        for(int i = 0; i < errorArray.length; ++i) {
+                            if(errorArray[i]) {
+                                flag = false;
+                            }
+                        }
+                        if(flag) {
+                            form('h', number(message.getCo(), 1)).send("ABCD");
+
+                        }
 
                         switch (message.getSe()) {
                             case 'A':
                                 errorArray[0] = true;
+                                errorIntArray[0] = number(message.getCo(),  1);
                                 break;
                             case 'B':
                                 errorArray[1] = true;
+                                errorIntArray[1] = number(message.getCo(),  1);
                                 break;
                             case 'C':
                                 errorArray[2] = true;
+                                errorIntArray[2] = number(message.getCo(),  1);
                                 break;
                             case 'D':
                                 errorArray[3] = true;
+                                errorIntArray[3] = number(message.getCo(),  1);
                                 break;
                         }
 
-                        // send hold command
-                        form('h', "").send("ABCD");
-
-
-                        break;
-
-                    // received confirmation of holding
-                    case 'c':
-                        confirmationCount++;
-
-                        if (confirmationCount >= 4) {
-                            sendReconfigurationMessage(calculateRl());
-                            confirmationCount = 0;
-                        }
                         break;
 
                     // RP message received
@@ -566,62 +584,13 @@ class FtVerwalter extends Node
     }
 
 
-    private void sendReconfigurationMessage(int rpNum) throws SoFTException {
-
-        printDebugArrays();
-
-        // @debug
-        say("set to rl: " + rpNum);
-
-        boolean found = false;
-
-        for (String s : rpListA) {
-            if (number(s, 3) == rpNum) {
-                form('r', s).send('A');
-                found = true;
-                break;
-            }
-        }
-        if (!found) {
-            form('r', "").send('A');
-        }
-        found = false;
-
-        for (String s : rpListB) {
-            if (number(s, 3) == rpNum) {
-                form('r', s).send('B');
-                found = true;
-                break;
-            }
-        }
-        if (!found) {
-            form('r', "").send('B');
-        }
-        found = false;
-
-        for (String s : rpListC) {
-            if (number(s, 3) == rpNum) {
-                form('r', s).send('C');
-                found = true;
-                break;
-            }
-        }
-        if (!found) {
-            form('r', "").send('C');
-        }
-        found = false;
-
-        for (String s : rpListD) {
-            if (number(s, 3) == rpNum) {
-                form('r', s).send('D');
-                found = true;
-                break;
-            }
-        }
-        if (!found) {
-            form('r', "").send('D');
+    private void resetErrorArrays() {
+        for (int i = 0; i < errorIntArray.length; ++i) {
+            errorIntArray[i] = 300;
+            errorArray[i] = false;
         }
     }
+
 
     private int calculateRl() {
         boolean[] solutionArray = new boolean[4];
@@ -638,10 +607,18 @@ class FtVerwalter extends Node
             if (flag && (rpNum < number(s, 1))) {
                 rpNum = number(s, 1);
             }
+
         }
+
+        //delete later RPs and RLs
+        deleteLaterRLs(rpNum);
+        deleteLaterRPs(rpNum,rpListA);
+        deleteLaterRPs(rpNum,rpListB);
+        deleteLaterRPs(rpNum,rpListC);
+        deleteLaterRPs(rpNum,rpListD);
+
         return rpNum;
     }
-
 
     /**
      * @param message
@@ -810,9 +787,16 @@ class FtVerwalter extends Node
         anzZurueck = 0;   // Noch nie zurückgesetzt.
         anzWeite = 0;   // Noch nie mit zunehmender Rücksetzweite.
         anzAnfang = 0;   // Noch nie auf den Anfang.
-        //
-        // *** Ggf. weitere Initialisierungen ***
-        //
+
+        resetErrorArrays();
+        rlList.clear();
+        rpListA.clear();
+        rpListB.clear();
+        rpListC.clear();
+        rpListD.clear();
+        messageList.clear();
+        terminationCount = 0;
+        holdingNodes = 0;
 
         // initialize RP-lists with an entry at 0
         rpListA.add("0 10000 0 0");

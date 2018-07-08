@@ -83,14 +83,36 @@ abstract class FtKnoten extends Node
 
                     msgFromE = receive("E", time() + 1500);
 
-                    if(msgFromE != null) {
+                    if (msgFromE != null) {
                         say("RELEASED");
 
-                        // TODO
+                        String content = msgFromE.getCo();
+
+                        if (!content.equals(" ")) {
+
+                            workInbox();
+
+                            int step = number(content, 1);
+                            int state = number(content, 2);
+
+                            setzeSchritt(step);
+                            setzeZustand(state);
+
+                            say("new values are: " + schritt() + " " + zustand());
+
+                            receive("X", time() + 200);
+
+                            throw new Anlauf();
+
+                        } else {
+                            say("no reset data send");
+                        }
 
 
                     } else {
+
                         // TODO
+
                         // @debug
                         say("SPECIAL CASE NOT YET IMPLEMENTED");
                     }
@@ -134,6 +156,21 @@ abstract class FtKnoten extends Node
         return "";
     }
 
+    void workInbox() throws SoFTException {
+        Msg msg = receive("ABCD", time() + 5);
+        while (msg != null) {
+
+            // rpNum from sender
+            int rpNumSender = number(msg.getCo(), 3);
+
+            if (rpNumSender < rpNum) {
+                // send a "copy" to E embedded in an a-message
+                form('a', msg.getSe() + " " + time() + " " + msg.getCo()).send("E");
+            }
+
+            msg = receive("ABCD", time() + 5);
+        }
+    }
 
     /**
      * Sends an RP to E.
@@ -458,7 +495,7 @@ class FtVerwalter extends Node
     private boolean[] errorArray = {false, false, false, false};
 
     // array to save in what step the error was observed
-    private int[] errorIntArray = {300, 300, 300, 300};
+    private long[] errorLongArray = {300, 300, 300, 300};
 
     public String runNode(String input) throws SoFTException {
         initialisierung();
@@ -474,40 +511,85 @@ class FtVerwalter extends Node
             if (message != null) {
                 switch (message.getTy()) {
                     case 'c':
-                        if(++holdingNodes >= (4-terminationCount)) {
+                        if (++holdingNodes >= (4 - terminationCount)) {
 
-                            String aContent = "";
-                            String bContent = "";
-                            String cContent = "";
-                            String dContent = "";
+                            ArrayList<String> aMessages = new ArrayList<>();
+                            ArrayList<String> bMessages = new ArrayList<>();
+                            ArrayList<String> cMessages = new ArrayList<>();
+                            ArrayList<String> dMessages = new ArrayList<>();
 
-                            // TODO calculate contents
-                            // @debug
-                            say("set to rl: " + calculateRl());
+                            // find RL
+                            int rl = calculateRl();
 
-                            form('r', aContent).send("A");
-                            form('r', bContent).send("B");
-                            form('r', cContent).send("C");
-                            form('r', dContent).send("D");
+                            // find each RP from RL ( step state time )
+                            String aContent = findRptoNum(rl, rpListA);
+                            String bContent = findRptoNum(rl, rpListB);
+                            String cContent = findRptoNum(rl, rpListC);
+                            String dContent = findRptoNum(rl, rpListD);
+
+                            long aTime = number(aContent, 3);
+                            long bTime = number(bContent, 3);
+                            long cTime = number(cContent, 3);
+                            long dTime = number(dContent, 3);
+
+                            // send RP to corresponding node
+                            form('r', word(aContent, 1) + " " + word(aContent, 2)).send("A");
+                            form('r', word(bContent, 1) + " " + word(bContent, 2)).send("B");
+                            form('r', word(cContent, 1) + " " + word(cContent, 2)).send("C");
+                            form('r', word(dContent, 1) + " " + word(dContent, 2)).send("D");
+
+                            receive("X", time() + 500);
+
+                            // wait for nodes to send a messages
+                            Msg msg = receive("ABCD", time() + 5);
+
+                            while (msg != null) {
+                                say("received " + msg.getCo());
+                                if (msg.getTy() == 'a') {
+                                    storeMessage(msg);
+                                }
+                                msg = receive("ABCD", time() + 30);
+                            }
+
+                            // find messages to resend
+                            aMessages = findMessages(aTime, 'A');
+                            bMessages = findMessages(bTime, 'B');
+                            cMessages = findMessages(cTime, 'C');
+                            dMessages = findMessages(dTime, 'D');
+
+                            // resend messages
+                            for (String s : aMessages) {
+                                form('n', s).send('A');
+                            }
+                            for (String s : bMessages) {
+                                form('n', s).send('B');
+                            }
+                            for (String s : cMessages) {
+                                form('n', s).send('C');
+                            }
+                            for (String s : dMessages) {
+                                form('n', s).send('D');
+                            }
+
 
                             // all errors should be resolved
                             resetErrorArrays();
+
                             // release nodes
                             holdingNodes = 0;
                         }
-
                         break;
 
                     // error message
                     case 'f':
 
                         boolean flag = true;
-                        for(int i = 0; i < errorArray.length; ++i) {
-                            if(errorArray[i]) {
+                        for (int i = 0; i < errorArray.length; ++i) {
+                            if (errorArray[i]) {
                                 flag = false;
                             }
                         }
-                        if(flag) {
+                        if (flag) {
                             form('h', number(message.getCo(), 1)).send("ABCD");
 
                         }
@@ -515,19 +597,19 @@ class FtVerwalter extends Node
                         switch (message.getSe()) {
                             case 'A':
                                 errorArray[0] = true;
-                                errorIntArray[0] = number(message.getCo(),  1);
+                                errorLongArray[0] = number(message.getCo(), 1);
                                 break;
                             case 'B':
                                 errorArray[1] = true;
-                                errorIntArray[1] = number(message.getCo(),  1);
+                                errorLongArray[1] = number(message.getCo(), 1);
                                 break;
                             case 'C':
                                 errorArray[2] = true;
-                                errorIntArray[2] = number(message.getCo(),  1);
+                                errorLongArray[2] = number(message.getCo(), 1);
                                 break;
                             case 'D':
                                 errorArray[3] = true;
-                                errorIntArray[3] = number(message.getCo(),  1);
+                                errorLongArray[3] = number(message.getCo(), 1);
                                 break;
                         }
 
@@ -584,9 +666,36 @@ class FtVerwalter extends Node
     }
 
 
+    private ArrayList<String> findMessages(long time, char node) {
+        ArrayList<String> list = new ArrayList<>();
+
+        // find entries that were sent to node, between minTime and maxTime
+        for (String s : messageList) {
+            long sTime = number(s, 1);
+            if ((word(s, 3).charAt(0) == node) && (sTime > time)) {
+                list.add(word(s, 4) + " " + word(s, 5) + " " + word(s, 6));
+            }
+        }
+
+        return list;
+    }
+
+
+    private String findRptoNum(int num, ArrayList<String> list) {
+        String content = "";
+        for (String s : list) {
+            if (number(s, 3) == num) {
+                content = (number(s, 1) + " " + number(s, 2) + " " + number(s, 4));
+                break;
+            }
+        }
+        return content;
+    }
+
+
     private void resetErrorArrays() {
-        for (int i = 0; i < errorIntArray.length; ++i) {
-            errorIntArray[i] = 300;
+        for (int i = 0; i < errorLongArray.length; ++i) {
+            errorLongArray[i] = 300;
             errorArray[i] = false;
         }
     }
@@ -612,10 +721,10 @@ class FtVerwalter extends Node
 
         //delete later RPs and RLs
         deleteLaterRLs(rpNum);
-        deleteLaterRPs(rpNum,rpListA);
-        deleteLaterRPs(rpNum,rpListB);
-        deleteLaterRPs(rpNum,rpListC);
-        deleteLaterRPs(rpNum,rpListD);
+        deleteLaterRPs(rpNum, rpListA);
+        deleteLaterRPs(rpNum, rpListB);
+        deleteLaterRPs(rpNum, rpListC);
+        deleteLaterRPs(rpNum, rpListD);
 
         return rpNum;
     }
@@ -683,14 +792,14 @@ class FtVerwalter extends Node
         ArrayList<String> list = new ArrayList<>();
 
         //search for entries to delete
-        for(String s: rlList) {
-            if(number(s, 1) > rlNum) {
+        for (String s : rlList) {
+            if (number(s, 1) > rlNum) {
                 list.add(s);
             }
         }
 
         //delete entries
-        for(String s: list) {
+        for (String s : list) {
             rlList.remove(s);
         }
 
@@ -707,14 +816,14 @@ class FtVerwalter extends Node
         ArrayList<String> list = new ArrayList<>();
 
         //search for entries to delete
-        for(String s: rpList) {
-            if(number(s, 3) > rpNum) {
+        for (String s : rpList) {
+            if (number(s, 3) > rpNum) {
                 list.add(s);
             }
         }
 
         //delete entries
-        for(String s: list) {
+        for (String s : list) {
             rpList.remove(s);
         }
     }

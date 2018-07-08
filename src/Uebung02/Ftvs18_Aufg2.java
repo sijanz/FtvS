@@ -27,6 +27,8 @@ abstract class FtKnoten extends Node
 
     public String runNode(String input) throws SoFTException {
         anzInitRL = 0;            // Noch keine RL initiiert.
+        rpNum = 0;
+        globalRpNum = 0;
         initialisierung(input);   // Anwendung startet.
         lauf();                   // Anwendung läuft.
         return terminierung();    // Knoten beendet seine Arbeit.
@@ -427,6 +429,9 @@ class FtVerwalter extends Node
     // formatting: rpNum A B C D
     private ArrayList<String> rlList = new ArrayList<>();
 
+    // array to save errors
+    private boolean[] errorArray = {false, false, false, false};
+
     public String runNode(String input) throws SoFTException {
         initialisierung();
 
@@ -439,6 +444,27 @@ class FtVerwalter extends Node
 
             if (message != null) {
                 switch (message.getTy()) {
+
+                    // error message
+                    case 'f':
+                        switch (message.getSe()) {
+                            case 'A':
+                                errorArray[0] = true;
+                                break;
+                            case 'B':
+                                errorArray[1] = true;
+                                break;
+                            case 'C':
+                                errorArray[2] = true;
+                                break;
+                            case 'D':
+                                errorArray[3] = true;
+                                break;
+                        }
+
+                        // @debug
+                        say("set to rl: " + calculateRl());
+                        break;
 
                     // RP message received
                     case 'r':
@@ -488,6 +514,27 @@ class FtVerwalter extends Node
                 + anzZurueck + " mal zurückgesetzt, "
                 + anzWeite + " mal mit zunehmender Rücksetzweite, "
                 + anzAnfang + " mal auf den Anfang.";
+    }
+
+
+    private int calculateRl() {
+        boolean[] solutionArray = new boolean[4];
+        int rpNum = 0;
+        for (String s : rlList) {
+            boolean flag = true;
+            for (int i = 0; i < 3; ++i) {
+                solutionArray[i] = !(errorArray[i] && (number(s, i + 2) == 0));
+                if (!solutionArray[i]) {
+                    flag = false;
+                    break;
+                }
+            }
+            if (flag && (rpNum < number(s, 1))) {
+                rpNum = number(s, 1);
+            }
+
+        }
+        return rpNum;
     }
 
 
